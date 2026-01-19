@@ -455,7 +455,7 @@ wheels = [
 
 [[package]]
 name = "mogger"
-version = "0.1.0"
+version = "0.1.1"
 source = { virtual = "." }
 dependencies = [
     { name = "cprint" },
@@ -467,6 +467,13 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+dev = [
+    { name = "build" },
+    { name = "pip" },
+    { name = "twine" },
+]
+
+[package.dev-dependencies]
 dev = [
     { name = "build" },
     { name = "pip" },
@@ -486,6 +493,13 @@ requires-dist = [
     { name = "twine", marker = "extra == 'dev'", specifier = ">=6.2.0" },
 ]
 provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "build", specifier = ">=1.4.0" },
+    { name = "pip", specifier = ">=25.3" },
+    { name = "twine", specifier = ">=6.2.0" },
+]
 
 [[package]]
 name = "more-itertools"
