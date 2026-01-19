@@ -47,16 +47,15 @@ def test_db_path():
 
 @pytest.fixture
 def clean_test_db(test_db_path):
-    """Remove test database before and after tests."""
-    # Remove before test
+    """Remove test database before tests (but keep it after for inspection)."""
+    # Remove before test if it exists from previous run
     if test_db_path.exists():
         test_db_path.unlink()
     
     yield
     
-    # Remove after test
-    if test_db_path.exists():
-        test_db_path.unlink()
+    # Keep the database after tests for inspection
+    # It will be deleted in the next test run
 
 
 @pytest.fixture
