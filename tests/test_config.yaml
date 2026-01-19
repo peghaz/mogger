@@ -1,0 +1,74 @@
+# Test Configuration for Mogger
+# Used for pytest testing with isolated test database
+
+database:
+  path: "./mogger_test_logs.db"
+  wal_mode: true
+
+tables:
+  - name: "user_actions"
+    fields:
+      - name: "user_id"
+        type: "string"
+        indexed: true
+      - name: "action"
+        type: "string"
+      - name: "ip_address"
+        type: "string"
+        nullable: true
+      - name: "metadata"
+        type: "json"
+        nullable: true
+  
+  - name: "errors"
+    fields:
+      - name: "error_code"
+        type: "integer"
+      - name: "error_message"
+        type: "text"
+      - name: "stack_trace"
+        type: "text"
+        nullable: true
+      - name: "severity"
+        type: "string"
+  
+  - name: "system_events"
+    fields:
+      - name: "event_type"
+        type: "string"
+        indexed: true
+      - name: "description"
+        type: "text"
+      - name: "duration_ms"
+        type: "float"
+        nullable: true
+  
+  - name: "api_requests"
+    fields:
+      - name: "endpoint"
+        type: "string"
+        indexed: true
+      - name: "method"
+        type: "string"
+      - name: "status_code"
+        type: "integer"
+      - name: "response_time_ms"
+        type: "float"
+      - name: "request_body"
+        type: "json"
+        nullable: true
+      - name: "response_body"
+        type: "json"
+        nullable: true
+
+terminal:
+  enabled: false  # Disable for tests to avoid cluttering output
+  format: "{timestamp} [{level}] [{table}] {message}"
+  timestamp_format: "%Y-%m-%d %H:%M:%S"
+  colors:
+    DEBUG: "cyan"
+    INFO: "green"
+    WARNING: "yellow"
+    ERROR: "red"
+    CRITICAL: "magenta"
+  show_uuid: false

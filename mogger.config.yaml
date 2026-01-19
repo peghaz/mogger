@@ -1,0 +1,83 @@
+# Mogger Configuration Template
+# This file defines the structure of your logging database and terminal output settings
+# ! You can use this example to create your own 'mogger.config.yaml' file
+
+database:
+  # Path to the SQLite database file (relative to project root or absolute path)
+  path: "./mogger_logs.db"
+  
+  # Enable Write-Ahead Logging mode for better concurrency
+  wal_mode: true
+
+# Define custom log tables with their fields
+tables:
+  # Example: User action logs
+  - name: "user_actions"
+    fields:
+      - name: "user_id"
+        type: "string"
+        indexed: true
+      - name: "action"
+        type: "string"
+      - name: "ip_address"
+        type: "string"
+        nullable: true
+      - name: "metadata"
+        type: "json"
+        nullable: true
+  
+  # Example: Error logs
+  - name: "errors"
+    fields:
+      - name: "error_code"
+        type: "integer"
+      - name: "error_message"
+        type: "text"
+      - name: "stack_trace"
+        type: "text"
+        nullable: true
+      - name: "severity"
+        type: "string"
+  
+  # Example: System events
+  - name: "system_events"
+    fields:
+      - name: "event_type"
+        type: "string"
+        indexed: true
+      - name: "description"
+        type: "text"
+      - name: "duration_ms"
+        type: "float"
+        nullable: true
+
+# Terminal output configuration
+terminal:
+  # Enable/disable terminal output
+  enabled: true
+  
+  # Output format (available placeholders: {timestamp}, {level}, {table}, {uuid}, {message})
+  format: "{timestamp} [{level}] [{table}] {message}"
+  
+  # Timestamp format (Python strftime format)
+  timestamp_format: "%Y-%m-%d %H:%M:%S"
+  
+  # Color mapping for log levels
+  colors:
+    DEBUG: "cyan"
+    INFO: "green"
+    WARNING: "yellow"
+    ERROR: "red"
+    CRITICAL: "magenta"
+  
+  # Show UUID in terminal output
+  show_uuid: false
+
+# Supported field types:
+# - string: Variable-length string
+# - text: Long text
+# - integer: Integer number
+# - float: Floating point number
+# - boolean: True/False
+# - json: JSON data (stored as text, serialized/deserialized automatically)
+# - datetime: Date and time

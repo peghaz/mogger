@@ -5,15 +5,25 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "build>=1.4.0",
-    "pip>=25.3",
-    "twine>=6.2.0",
+    "cprint>=1.2.2",
+    "sqlalchemy>=2.0.0",
+    "pyyaml>=6.0",
+    "pydantic>=2.0.0",
+    "pytest>=9.0.2",
+    "rich>=14.2.0",
 ]
 
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+]
+
+[project.optional-dependencies]
+dev = [
+    "build>=1.4.0",
+    "pip>=25.3",
+    "twine>=6.2.0",
 ]
 
 [tool.setuptools]

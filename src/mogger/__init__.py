@@ -1,3 +1,4 @@
-from .core import initial_call
+from .core import Mogger
 
-__all__ = ["initial_call"]
+__version__ = "0.1.0"
+__all__ = ["Mogger"]
