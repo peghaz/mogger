@@ -59,12 +59,12 @@ logger = Mogger()
 # logger = Mogger("path/to/config.yaml")
 
 # Log messages
-logger.info("User logged in", table="user_actions", user_id="123", action="login")
-logger.error("Something failed", table="errors", error_code=500, error_message="Server error")
+logger.info("User logged in", category="user_actions", user_id="123", action="login")
+logger.error("Something failed", category="errors", error_code=500, error_message="Server error")
 
 # Query logs
-recent_errors = logger.query(table="errors", limit=10)
-user_logs = logger.query(table="user_actions", user_id="123")
+recent_errors = logger.query(category="errors", limit=10)
+user_logs = logger.query(category="user_actions", user_id="123")
 
 # Close when done
 logger.close()
@@ -104,8 +104,8 @@ Available colors: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, 
 # Set context that applies to all subsequent logs
 logger.set_context(request_id="req_123", user_id="user_456")
 
-logger.info("Action 1", table="user_actions", action="click")
-logger.info("Action 2", table="user_actions", action="scroll")
+logger.info("Action 1", category="user_actions", action="click")
+logger.info("Action 2", category="user_actions", action="scroll")
 
 # Clear context
 logger.clear_context()
@@ -121,14 +121,14 @@ logger.set_terminal(False)  # Logs only to database
 
 ```python
 # Get all logs from a table
-all_logs = logger.query(table="user_actions")
+all_logs = logger.query(category="user_actions")
 
 # Filter logs
-errors = logger.query(table="logs_master", log_level="ERROR")
-user_errors = logger.query(table="errors", user_id="123")
+errors = logger.query(category="logs_master", log_level="ERROR")
+user_errors = logger.query(category="errors", user_id="123")
 
 # Limit results
-recent = logger.query(table="user_actions", limit=50)
+recent = logger.query(category="user_actions", limit=50)
 ```
 
 ## Development

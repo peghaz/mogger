@@ -14,7 +14,7 @@ class TestBasicLogging:
         """Test logging an INFO message."""
         log_uuid = logger.info(
             "User logged in successfully",
-            table="user_actions",
+            category="user_actions",
             user_id="user_123",
             action="login",
             ip_address="192.168.1.100"
@@ -29,7 +29,7 @@ class TestBasicLogging:
         """Test logging a DEBUG message."""
         log_uuid = logger.debug(
             "Debug information",
-            table="system_events",
+            category="system_events",
             event_type="debug",
             description="Debugging application state"
         )
@@ -41,7 +41,7 @@ class TestBasicLogging:
         """Test logging a WARNING message."""
         log_uuid = logger.warning(
             "High memory usage detected",
-            table="system_events",
+            category="system_events",
             event_type="warning",
             description="Memory usage at 85%",
             duration_ms=150.5
@@ -54,7 +54,7 @@ class TestBasicLogging:
         """Test logging an ERROR message."""
         log_uuid = logger.error(
             "Database connection failed",
-            table="errors",
+            category="errors",
             error_code=500,
             error_message="Connection timeout after 30s",
             severity="high"
@@ -67,7 +67,7 @@ class TestBasicLogging:
         """Test logging a CRITICAL message."""
         log_uuid = logger.critical(
             "System shutdown imminent",
-            table="errors",
+            category="errors",
             error_code=999,
             error_message="Critical system failure",
             severity="critical"
@@ -81,7 +81,7 @@ class TestBasicLogging:
         log_uuid = logger.log(
             logger.INFO,
             "Custom log level",
-            table="user_actions",
+            category="user_actions",
             user_id="user_456",
             action="custom_action"
         )
@@ -107,7 +107,7 @@ class TestComplexLogging:
         
         log_uuid = logger.info(
             "User preferences updated",
-            table="user_actions",
+            category="user_actions",
             user_id="user_789",
             action="update_preferences",
             metadata=metadata
@@ -119,7 +119,7 @@ class TestComplexLogging:
         """Test logging with nullable fields omitted."""
         log_uuid = logger.info(
             "Anonymous user action",
-            table="user_actions",
+            category="user_actions",
             user_id="anonymous",
             action="view_page"
             # ip_address and metadata are nullable and omitted
@@ -131,7 +131,7 @@ class TestComplexLogging:
         """Test logging with float values."""
         log_uuid = logger.info(
             "API request completed",
-            table="api_requests",
+            category="api_requests",
             endpoint="/api/v1/users",
             method="GET",
             status_code=200,
@@ -155,7 +155,7 @@ class TestComplexLogging:
         
         log_uuid = logger.info(
             "User creation API call",
-            table="api_requests",
+            category="api_requests",
             endpoint="/api/v1/users",
             method="POST",
             status_code=201,
@@ -179,7 +179,7 @@ class TestComplexLogging:
         
         log_uuid = logger.error(
             "Database query failed",
-            table="errors",
+            category="errors",
             error_code=503,
             error_message="Database connection lost during query",
             stack_trace=stack_trace.strip(),
@@ -197,7 +197,7 @@ class TestLoggingErrors:
         with pytest.raises(ValueError, match="Required field"):
             logger.info(
                 "Incomplete log",
-                table="errors",
+                category="errors",
                 error_code=404
                 # error_message and severity are required but missing
             )
@@ -207,7 +207,7 @@ class TestLoggingErrors:
         with pytest.raises(ValueError, match="Table.*not found"):
             logger.info(
                 "Invalid table",
-                table="nonexistent_table",
+                category="nonexistent_table",
                 some_field="value"
             )
     
@@ -216,7 +216,7 @@ class TestLoggingErrors:
         # Should succeed - extra fields are just ignored in kwargs
         log_uuid = logger.info(
             "Log with extra fields",
-            table="system_events",
+            category="system_events",
             event_type="test",
             description="Testing extra fields",
             extra_field_1="ignored",
@@ -236,7 +236,7 @@ class TestBulkLogging:
         for i in range(10):
             log_uuid = logger.info(
                 f"Bulk log {i}",
-                table="user_actions",
+                category="user_actions",
                 user_id=f"user_{i}",
                 action="bulk_test",
                 ip_address=f"192.168.1.{i}"
@@ -250,14 +250,14 @@ class TestBulkLogging:
         """Test logging to multiple different tables."""
         log1 = logger.info(
             "User action",
-            table="user_actions",
+            category="user_actions",
             user_id="user_1",
             action="login"
         )
         
         log2 = logger.error(
             "Error occurred",
-            table="errors",
+            category="errors",
             error_code=500,
             error_message="Internal error",
             severity="medium"
@@ -265,14 +265,14 @@ class TestBulkLogging:
         
         log3 = logger.info(
             "System event",
-            table="system_events",
+            category="system_events",
             event_type="startup",
             description="Application started"
         )
         
         log4 = logger.info(
             "API request",
-            table="api_requests",
+            category="api_requests",
             endpoint="/api/health",
             method="GET",
             status_code=200,
@@ -286,15 +286,15 @@ class TestBulkLogging:
         """Test logging with mixed severity levels."""
         logs = []
         
-        logs.append(logger.debug("Debug message", table="system_events",
+        logs.append(logger.debug("Debug message", category="system_events",
                                  event_type="debug", description="Debug info"))
-        logs.append(logger.info("Info message", table="system_events",
+        logs.append(logger.info("Info message", category="system_events",
                                 event_type="info", description="Info message"))
-        logs.append(logger.warning("Warning message", table="system_events",
+        logs.append(logger.warning("Warning message", category="system_events",
                                    event_type="warning", description="Warning occurred"))
-        logs.append(logger.error("Error message", table="errors",
+        logs.append(logger.error("Error message", category="errors",
                                  error_code=400, error_message="Bad request", severity="low"))
-        logs.append(logger.critical("Critical message", table="errors",
+        logs.append(logger.critical("Critical message", category="errors",
                                     error_code=999, error_message="Critical failure", severity="critical"))
         
         assert len(logs) == 5

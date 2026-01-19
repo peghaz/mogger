@@ -32,7 +32,7 @@ class TestSampleDataGeneration:
             
             logger.info(
                 f"User {user} performed {action}",
-                table="user_actions",
+                category="user_actions",
                 user_id=f"user_{user}",
                 action=action,
                 ip_address=ip,
@@ -40,7 +40,7 @@ class TestSampleDataGeneration:
             )
         
         # Verify logs were created
-        results = logger.query(table="user_actions")
+        results = logger.query(category="user_actions")
         assert len(results) >= 50
     
     def test_generate_error_scenarios(self, logger):
@@ -74,7 +74,7 @@ Traceback (most recent call last):
             
             logger.error(
                 f"HTTP {code}: {title}",
-                table="errors",
+                category="errors",
                 error_code=code,
                 error_message=message,
                 stack_trace=stack_trace,
@@ -82,7 +82,7 @@ Traceback (most recent call last):
             )
         
         # Verify errors were logged
-        results = logger.query(table="errors")
+        results = logger.query(category="errors")
         assert len(results) >= 30
     
     def test_generate_system_events(self, logger):
@@ -112,20 +112,20 @@ Traceback (most recent call last):
                 description += " (slow execution)"
             
             if log_level == "ERROR":
-                logger.error(description, table="system_events",
+                logger.error(description, category="system_events",
                            event_type=event_type, description=description,
                            duration_ms=duration)
             elif log_level == "WARNING":
-                logger.warning(description, table="system_events",
+                logger.warning(description, category="system_events",
                              event_type=event_type, description=description,
                              duration_ms=duration)
             else:
-                logger.info(description, table="system_events",
+                logger.info(description, category="system_events",
                           event_type=event_type, description=description,
                           duration_ms=duration)
         
         # Verify events were logged
-        results = logger.query(table="system_events")
+        results = logger.query(category="system_events")
         assert len(results) >= 40
     
     def test_generate_api_request_logs(self, logger):
@@ -181,7 +181,7 @@ Traceback (most recent call last):
             
             logger.info(
                 f"{method} {endpoint} - {status_code}",
-                table="api_requests",
+                category="api_requests",
                 endpoint=endpoint,
                 method=method,
                 status_code=status_code,
@@ -191,7 +191,7 @@ Traceback (most recent call last):
             )
         
         # Verify API requests were logged
-        results = logger.query(table="api_requests")
+        results = logger.query(category="api_requests")
         assert len(results) >= 100
 
 
@@ -204,66 +204,66 @@ class TestComplexScenarios:
         session_id = "sess_12345"
         
         # User logs in
-        logger.info("User login", table="user_actions",
+        logger.info("User login", category="user_actions",
                    user_id=user_id, action="login",
                    ip_address="203.0.113.42",
                    metadata={"session_id": session_id, "2fa_enabled": True})
         
         # Browse content
         for i in range(5):
-            logger.info(f"View content {i}", table="user_actions",
+            logger.info(f"View content {i}", category="user_actions",
                        user_id=user_id, action="view_content",
                        metadata={"content_id": f"post_{i}", "session_id": session_id})
         
         # Attempt to upload file - fails
-        logger.error("File upload failed", table="errors",
+        logger.error("File upload failed", category="errors",
                     error_code=413,
                     error_message="File size exceeds maximum allowed size of 10MB",
                     severity="low")
         
         # Successful upload after resize
-        logger.info("File upload", table="user_actions",
+        logger.info("File upload", category="user_actions",
                    user_id=user_id, action="upload_file",
                    metadata={"file_size": "8MB", "session_id": session_id})
         
         # User logs out
-        logger.info("User logout", table="user_actions",
+        logger.info("User logout", category="user_actions",
                    user_id=user_id, action="logout",
                    metadata={"session_duration": 1847, "session_id": session_id})
         
         # Verify journey was logged
-        user_logs = logger.query(table="user_actions", user_id=user_id)
+        user_logs = logger.query(category="user_actions", user_id=user_id)
         assert len(user_logs) >= 7
     
     def test_system_maintenance_workflow(self, logger):
         """Simulate a system maintenance workflow."""
         maintenance_id = "maint_2026_01_19"
         
-        logger.warning("Starting maintenance", table="system_events",
+        logger.warning("Starting maintenance", category="system_events",
                       event_type="maintenance_start",
                       description=f"Scheduled maintenance {maintenance_id} beginning")
         
-        logger.info("Database backup", table="system_events",
+        logger.info("Database backup", category="system_events",
                    event_type="database_backup",
                    description="Creating pre-maintenance backup",
                    duration_ms=45000.0)
         
-        logger.info("Index rebuild", table="system_events",
+        logger.info("Index rebuild", category="system_events",
                    event_type="index_rebuild",
                    description="Rebuilding database indices",
                    duration_ms=120000.0)
         
-        logger.info("Cache clear", table="system_events",
+        logger.info("Cache clear", category="system_events",
                    event_type="cache_clear",
                    description="Clearing application cache")
         
-        logger.info("Maintenance complete", table="system_events",
+        logger.info("Maintenance complete", category="system_events",
                    event_type="maintenance_end",
                    description=f"Maintenance {maintenance_id} completed successfully",
                    duration_ms=165000.0)
         
         # Verify maintenance workflow
-        results = logger.query(table="system_events", event_type="maintenance_start")
+        results = logger.query(category="system_events", event_type="maintenance_start")
         assert len(results) >= 1
     
     def test_load_test_simulation(self, logger):
@@ -274,23 +274,23 @@ class TestComplexScenarios:
             method = "GET"
             status = 200 if i % 10 != 0 else 503
             
-            logger.info(f"Load test request {i}", table="api_requests",
+            logger.info(f"Load test request {i}", category="api_requests",
                        endpoint=endpoint, method=method,
                        status_code=status,
                        response_time_ms=random.uniform(100.0, 2000.0))
         
         # Log performance warnings
-        logger.warning("High load detected", table="system_events",
+        logger.warning("High load detected", category="system_events",
                       event_type="performance_warning",
                       description="Request queue length: 150, CPU: 85%, Memory: 78%")
         
-        logger.warning("Database slow queries", table="system_events",
+        logger.warning("Database slow queries", category="system_events",
                       event_type="performance_warning",
                       description="5 queries exceeded 1000ms threshold",
                       duration_ms=1500.0)
         
         # Verify load test logged
-        results = logger.query(table="api_requests")
+        results = logger.query(category="api_requests")
         assert len(results) >= 50
 
 
@@ -310,11 +310,11 @@ class TestDiverseDataTypes:
         ]
         
         for i, metadata in enumerate(json_examples):
-            logger.info(f"JSON example {i}", table="user_actions",
+            logger.info(f"JSON example {i}", category="user_actions",
                        user_id=f"json_test_{i}", action="test",
                        metadata=metadata)
         
-        results = logger.query(table="user_actions")
+        results = logger.query(category="user_actions")
         assert len(results) >= len(json_examples)
     
     def test_long_text_entries(self, logger):
@@ -322,11 +322,11 @@ class TestDiverseDataTypes:
         long_error = "A" * 5000
         long_stack = "\n".join([f"  File line_{i}, in function_{i}" for i in range(100)])
         
-        logger.error("Long error message", table="errors",
+        logger.error("Long error message", category="errors",
                     error_code=500,
                     error_message=long_error,
                     stack_trace=long_stack,
                     severity="medium")
         
-        results = logger.query(table="errors")
+        results = logger.query(category="errors")
         assert len(results) >= 1

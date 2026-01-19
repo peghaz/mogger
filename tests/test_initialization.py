@@ -55,7 +55,7 @@ class TestTerminalConfiguration:
         # We can't directly access private config, but we can verify behavior
         log_uuid = logger.info(
             "Test message",
-            table="system_events",
+            category="system_events",
             event_type="test",
             description="Testing terminal output"
         )
@@ -67,7 +67,7 @@ class TestTerminalConfiguration:
         # Should not raise any errors
         log_uuid = logger.info(
             "Terminal enabled",
-            table="system_events",
+            category="system_events",
             event_type="test",
             description="Test with terminal"
         )
@@ -78,7 +78,7 @@ class TestTerminalConfiguration:
         logger.set_terminal(False)
         log_uuid = logger.info(
             "Terminal disabled",
-            table="system_events",
+            category="system_events",
             event_type="test",
             description="Test without terminal"
         )

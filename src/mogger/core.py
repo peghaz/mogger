@@ -114,7 +114,7 @@ class Mogger:
         except Exception as e:
             raise RuntimeError(f"Failed to load config: {e}")
 
-    def __print_to_terminal(self, level: str, table: str, log_uuid: str, message: str, **kwargs) -> None:
+    def __print_to_terminal(self, level: str, category: str, log_uuid: str, message: str, **kwargs) -> None:
         """Print log to terminal with formatting and colors."""
         if not self.__config.terminal.enabled:
             return
@@ -125,7 +125,7 @@ class Mogger:
         formatted_msg = self.__config.terminal.format.format(
             timestamp=timestamp,
             level=level,
-            table=table,
+            table=category,
             uuid=log_uuid if self.__config.terminal.show_uuid else "",
             message=message
         )
@@ -141,7 +141,7 @@ class Mogger:
         # Print with color using rich
         self.__console.print(formatted_msg, style=color)
     
-    def __insert_log(self, level: str, table: str, **kwargs) -> str:
+    def __insert_log(self, level: str, category: str, **kwargs) -> str:
         """
         Insert a log entry into the database.
 
@@ -156,7 +156,7 @@ class Mogger:
         self.__db_manager.insert_log(
             log_uuid=log_uuid,
             level=level,
-            table=table,
+            table=category,
             created_at=created_at,
             context_data=self.__context_data,
             **kwargs
@@ -164,46 +164,46 @@ class Mogger:
 
         return log_uuid
 
-    def log(self, level: str, message: str, table: str, **kwargs) -> str:
+    def log(self, level: str, message: str, category: str, **kwargs) -> str:
         """
         Log a message with custom level.
 
         Args:
             level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
             message: Log message
-            table: Target table name
+            category: Target category/table name
             **kwargs: Additional fields matching table schema
 
         Returns:
             UUID of the log entry
         """
         # Insert into database
-        log_uuid = self.__insert_log(level, table, **kwargs)
+        log_uuid = self.__insert_log(level, category, **kwargs)
 
         # Print to terminal
-        self.__print_to_terminal(level, table, log_uuid, message, **kwargs)
+        self.__print_to_terminal(level, category, log_uuid, message, **kwargs)
 
         return log_uuid
 
-    def debug(self, message: str, table: str, **kwargs) -> str:
+    def debug(self, message: str, category: str, **kwargs) -> str:
         """Log a DEBUG message."""
-        return self.log(self.DEBUG, message, table, **kwargs)
+        return self.log(self.DEBUG, message, category, **kwargs)
 
-    def info(self, message: str, table: str, **kwargs) -> str:
+    def info(self, message: str, category: str, **kwargs) -> str:
         """Log an INFO message."""
-        return self.log(self.INFO, message, table, **kwargs)
+        return self.log(self.INFO, message, category, **kwargs)
 
-    def warning(self, message: str, table: str, **kwargs) -> str:
+    def warning(self, message: str, category: str, **kwargs) -> str:
         """Log a WARNING message."""
-        return self.log(self.WARNING, message, table, **kwargs)
+        return self.log(self.WARNING, message, category, **kwargs)
 
-    def error(self, message: str, table: str, **kwargs) -> str:
+    def error(self, message: str, category: str, **kwargs) -> str:
         """Log an ERROR message."""
-        return self.log(self.ERROR, message, table, **kwargs)
+        return self.log(self.ERROR, message, category, **kwargs)
 
-    def critical(self, message: str, table: str, **kwargs) -> str:
+    def critical(self, message: str, category: str, **kwargs) -> str:
         """Log a CRITICAL message."""
-        return self.log(self.CRITICAL, message, table, **kwargs)
+        return self.log(self.CRITICAL, message, category, **kwargs)
 
     def set_terminal(self, enabled: bool) -> None:
         """Enable or disable terminal output."""
@@ -217,19 +217,19 @@ class Mogger:
         """Clear all context data."""
         self.__context_data.clear()
 
-    def query(self, table: str, limit: Optional[int] = None, **filters) -> List[Dict[str, Any]]:
+    def query(self, category: str, limit: Optional[int] = None, **filters) -> List[Dict[str, Any]]:
         """
-        Query logs from a specific table.
+        Query logs from a specific category.
 
         Args:
-            table: Table name to query
+            category: Category name to query
             limit: Maximum number of results
             **filters: Field filters (e.g., log_level="ERROR")
 
         Returns:
             List of log entries as dictionaries
         """
-        return self.__db_manager.query(table=table, limit=limit, **filters)
+        return self.__db_manager.query(table=category, limit=limit, **filters)
 
     def get_tables(self) -> List[str]:
         """Get list of all available log tables."""
