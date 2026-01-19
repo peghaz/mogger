@@ -1,8 +1,8 @@
 [project]
 name = "mogger"
-version = "0.1.0"
+version = "0.1.1"
 description = "Add your description here"
-readme = "README.md"
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
 dependencies = [
     "cprint>=1.2.2",
@@ -20,11 +20,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "build>=1.4.0",
-    "pip>=25.3",
-    "twine>=6.2.0",
-]
+dev = ["build>=1.4.0", "pip>=25.3", "twine>=6.2.0"]
 
 [tool.setuptools]
 package-dir = { "" = "src" }
