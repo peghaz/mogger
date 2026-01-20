@@ -1,12 +1,14 @@
 # Mogger
 
-A custom logging library with SQLite persistence and colored terminal output.
+A custom logging library with SQLite persistence, colored terminal output, and Loki integration.
 
 ## Features
 
 - **YAML-driven schema configuration** - Define your log tables and fields in a YAML file
 - **SQLite database with relational design** - All logs stored in a persistent database
 - **Colored terminal output** - Beautiful colored logs using Rich library
+- **Loki integration** - Send logs to Grafana Loki for centralized logging
+- **Flexible logging control** - Enable/disable database and terminal output per log
 - **UUID tracking** - Every log entry has a unique identifier
 - **Multiple log tables** - Create custom tables for different types of logs
 - **Context management** - Add context data to all logs in a scope
@@ -70,6 +72,91 @@ user_logs = logger.query(category="user_actions", user_id="123")
 logger.close()
 ```
 
+## Initialization Options
+
+### Basic Initialization
+
+```python
+from mogger import Mogger
+
+# Default: local database and terminal output enabled
+logger = Mogger("mogger_config.yaml")
+
+# Disable local database (Loki-only or terminal-only logging)
+logger = Mogger("mogger_config.yaml", use_local_db=False)
+
+# Custom database path
+logger = Mogger("mogger_config.yaml", db_path="./custom_logs.db")
+```
+
+### Loki Integration
+
+```python
+from mogger import Mogger, LokiConfig
+
+# Configure Loki
+loki_config = LokiConfig(
+    url="http://localhost:3100/loki/api/v1/push",
+    tags={"application": "my-app", "environment": "production"},
+    username="loki",  # Optional
+    password="password"  # Optional
+)
+
+# Initialize with Loki support
+logger = Mogger("mogger_config.yaml", loki_config=loki_config)
+
+# Loki-only logging (no local database)
+logger = Mogger("mogger_config.yaml", loki_config=loki_config, use_local_db=False)
+```
+
+## Logging Control Parameters
+
+All logging methods (`debug`, `info`, `warning`, `error`, `critical`) support these parameters:
+
+### `use_local_db` (default: `True`)
+
+Control whether logs are written to the local SQLite database.
+
+```python
+# Skip database for this specific log
+logger.info("Temporary message", category="user_actions", 
+            user_id="123", action="click", use_local_db=False)
+
+# Log only to Loki and terminal, not database
+logger.error("Remote error", category="errors", 
+             error_code=500, use_local_db=False)
+```
+
+### `log_to_shell` (default: `True`)
+
+Control whether logs are printed to the terminal.
+
+```python
+# Silent logging (database and Loki only)
+logger.info("Background task", category="system_events", 
+            event_type="cron", log_to_shell=False)
+
+# Quiet error logging
+logger.error("Internal error", category="errors", 
+             error_code=500, log_to_shell=False)
+```
+
+### Combining Parameters
+
+```python
+# Terminal only (no database, no Loki)
+logger.info("Debug info", category="user_actions", 
+            user_id="123", use_local_db=False, log_to_shell=True)
+
+# Completely silent (Loki only if configured)
+logger.info("Silent audit", category="audit", 
+            action="access", use_local_db=False, log_to_shell=False)
+
+# Database only (silent logging)
+logger.info("Background event", category="system_events", 
+            event_type="backup", log_to_shell=False)
+```
+
 ## Configuration
 
 ### Config File Naming
@@ -111,10 +198,10 @@ logger.info("Action 2", category="user_actions", action="scroll")
 logger.clear_context()
 ```
 
-### Disable Terminal Output
+### Disable Terminal Output Globally
 
 ```python
-logger.set_terminal(False)  # Logs only to database
+logger.set_terminal(False)  # Logs only to database (and Loki if configured)
 ```
 
 ### Query Logs
@@ -129,6 +216,74 @@ user_errors = logger.query(category="errors", user_id="123")
 
 # Limit results
 recent = logger.query(category="user_actions", limit=50)
+```
+
+## Use Cases
+
+### Scenario 1: Production with Loki + Local Database
+
+```python
+from mogger import Mogger, LokiConfig
+
+loki_config = LokiConfig(
+    url="https://loki.example.com/loki/api/v1/push",
+    tags={"application": "web-api", "environment": "production"}
+)
+
+logger = Mogger("mogger_config.yaml", loki_config=loki_config)
+
+# All logs go to local DB, Loki, and terminal
+logger.info("Request processed", category="api_requests", 
+            endpoint="/api/users", response_time=0.15)
+```
+
+### Scenario 2: Development with Terminal Only
+
+```python
+# No database, just terminal output
+logger = Mogger("mogger_config.yaml", use_local_db=False)
+
+logger.info("Debug message", category="user_actions", 
+            user_id="dev", action="test")
+```
+
+### Scenario 3: Loki-Only Logging (No Local Storage)
+
+```python
+from mogger import Mogger, LokiConfig
+
+loki_config = LokiConfig(
+    url="http://localhost:3100/loki/api/v1/push",
+    tags={"application": "microservice"}
+)
+
+logger = Mogger("mogger_config.yaml", loki_config=loki_config, use_local_db=False)
+
+# All logs go only to Loki
+logger.info("Service started", category="system_events", 
+            event_type="startup")
+```
+
+### Scenario 4: Mixed Logging Patterns
+
+```python
+logger = Mogger("mogger_config.yaml", loki_config=loki_config)
+
+# Important logs: all destinations
+logger.error("Critical failure", category="errors", 
+             error_code=500, severity="critical")
+
+# Debug logs: terminal only
+logger.debug("Variable value", category="debug", 
+             value=42, use_local_db=False)
+
+# Audit logs: database and Loki only (silent)
+logger.info("User action", category="audit", 
+            user_id="123", action="delete", log_to_shell=False)
+
+# Temporary logs: terminal only (not persisted)
+logger.info("Processing...", category="status", 
+            progress=50, use_local_db=False)
 ```
 
 ## Development
