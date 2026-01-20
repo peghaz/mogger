@@ -13,6 +13,7 @@ from rich.console import Console
 
 from .database import DatabaseManager
 from .models import MoggerConfig
+from .loki import LokiConfig, LokiLogger
 
 
 class Mogger:
@@ -34,7 +35,7 @@ class Mogger:
     ERROR = "ERROR"
     CRITICAL = "CRITICAL"
 
-    def __init__(self, config_path: Optional[Union[str, Path]] = None, db_path: Optional[str] = None):
+    def __init__(self, config_path: Optional[Union[str, Path]] = None, db_path: Optional[str] = None, loki_config: Optional[LokiConfig] = None):
         """
         Initialize Mogger with configuration file.
 
@@ -43,12 +44,14 @@ class Mogger:
                         'mogger_config.yaml', 'mogger.config.yaml', or '.mogger.yaml' 
                         in the current working directory.
             db_path: Optional override for database path
+            loki_config: Optional LokiConfig for sending logs to Loki server
         """
         self.__config_path = self.__find_config_file(config_path)
         self.__config: Optional[MoggerConfig] = None
         self.__db_manager: Optional[DatabaseManager] = None
         self.__context_data: Dict[str, Any] = {}
         self.__console = Console()  # Rich console for colored output
+        self.__loki_logger: Optional[LokiLogger] = None
 
         # Load and validate configuration
         self.__load_config()
@@ -59,6 +62,10 @@ class Mogger:
 
         # Initialize database manager
         self.__db_manager = DatabaseManager(self.__config)
+        
+        # Initialize Loki logger if config provided
+        if loki_config is not None:
+            self.__loki_logger = LokiLogger(loki_config)
     
     def __find_config_file(self, config_path: Optional[Union[str, Path]]) -> Path:
         """
@@ -182,6 +189,27 @@ class Mogger:
 
         # Print to terminal
         self.__print_to_terminal(level, category, log_uuid, message, **kwargs)
+        
+        # Send to Loki if configured
+        if self.__loki_logger is not None:
+            extra_data = {
+                "category": category,
+                "uuid": log_uuid,
+                **self.__context_data,
+                **kwargs
+            }
+            
+            level_lower = level.lower()
+            if level_lower == "debug":
+                self.__loki_logger.debug(message, extra=extra_data)
+            elif level_lower == "info":
+                self.__loki_logger.info(message, extra=extra_data)
+            elif level_lower == "warning":
+                self.__loki_logger.warning(message, extra=extra_data)
+            elif level_lower == "error":
+                self.__loki_logger.error(message, extra=extra_data)
+            elif level_lower == "critical":
+                self.__loki_logger.critical(message, extra=extra_data)
 
         return log_uuid
 
