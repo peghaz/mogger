@@ -271,7 +271,105 @@ class Mogger:
         Returns:
             List of log entries as dictionaries
         """
+        if not self.__use_local_db or self.__db_manager is None:
+            raise RuntimeError("Local database is not enabled. Initialize Mogger with use_local_db=True")
         return self.__db_manager.query(table=category, limit=limit, **filters)
+    
+    def query_latest(self, category: str, limit: int = 10, **filters) -> List[Dict[str, Any]]:
+        """
+        Query the most recent logs from a specific category.
+        
+        Args:
+            category: Category name to query (can be 'logs_master' or any configured table)
+            limit: Maximum number of results (default: 10)
+            **filters: Field filters (e.g., log_level="ERROR")
+        
+        Returns:
+            List of log entries as dictionaries, ordered by most recent first
+            
+        Example:
+            >>> logger.query_latest("user_actions", limit=5)
+            >>> logger.query_latest("logs_master", limit=10, log_level="ERROR")
+        """
+        if not self.__use_local_db or self.__db_manager is None:
+            raise RuntimeError("Local database is not enabled. Initialize Mogger with use_local_db=True")
+        return self.__db_manager.query_latest(table=category, limit=limit, **filters)
+    
+    def query_oldest(self, category: str, limit: int = 10, **filters) -> List[Dict[str, Any]]:
+        """
+        Query the oldest logs from a specific category.
+        
+        Args:
+            category: Category name to query (can be 'logs_master' or any configured table)
+            limit: Maximum number of results (default: 10)
+            **filters: Field filters (e.g., log_level="ERROR")
+        
+        Returns:
+            List of log entries as dictionaries, ordered by oldest first
+            
+        Example:
+            >>> logger.query_oldest("errors", limit=5)
+            >>> logger.query_oldest("logs_master", limit=10, table_name="user_actions")
+        """
+        if not self.__use_local_db or self.__db_manager is None:
+            raise RuntimeError("Local database is not enabled. Initialize Mogger with use_local_db=True")
+        return self.__db_manager.query_oldest(table=category, limit=limit, **filters)
+    
+    def query_between_timestamps(self, category: str, start_time: datetime, 
+                                 end_time: datetime, limit: Optional[int] = None,
+                                 **filters) -> List[Dict[str, Any]]:
+        """
+        Query logs between two timestamps.
+        
+        Args:
+            category: Category name to query (can be 'logs_master' or any configured table)
+            start_time: Start timestamp (inclusive)
+            end_time: End timestamp (inclusive)
+            limit: Maximum number of results (optional)
+            **filters: Field filters (e.g., log_level="ERROR")
+        
+        Returns:
+            List of log entries as dictionaries, ordered by most recent first
+            
+        Example:
+            >>> from datetime import datetime, timedelta
+            >>> start = datetime.now() - timedelta(hours=1)
+            >>> end = datetime.now()
+            >>> logger.query_between_timestamps("user_actions", start, end)
+            >>> logger.query_between_timestamps("logs_master", start, end, limit=50, log_level="WARNING")
+        """
+        if not self.__use_local_db or self.__db_manager is None:
+            raise RuntimeError("Local database is not enabled. Initialize Mogger with use_local_db=True")
+        return self.__db_manager.query_between_timestamps(
+            table=category, start_time=start_time, end_time=end_time, 
+            limit=limit, **filters
+        )
+    
+    def search_keyword(self, category: str, keyword: str, fields: Optional[List[str]] = None,
+                      limit: Optional[int] = None, **filters) -> List[Dict[str, Any]]:
+        """
+        Search for logs containing a keyword in specified fields.
+        
+        Args:
+            category: Category name to query (cannot be 'logs_master')
+            keyword: Keyword to search for (case-insensitive)
+            fields: List of field names to search in. If None, searches all string/text fields
+            limit: Maximum number of results (optional)
+            **filters: Additional field filters (e.g., log_level="ERROR")
+        
+        Returns:
+            List of log entries as dictionaries where at least one field contains the keyword
+            
+        Example:
+            >>> logger.search_keyword("errors", "database", fields=["error_message"])
+            >>> logger.search_keyword("user_actions", "login")
+            >>> logger.search_keyword("system_events", "failure", limit=20)
+        """
+        if not self.__use_local_db or self.__db_manager is None:
+            raise RuntimeError("Local database is not enabled. Initialize Mogger with use_local_db=True")
+        return self.__db_manager.search_keyword(
+            table=category, keyword=keyword, fields=fields, limit=limit, **filters
+        )
 
     def get_tables(self) -> List[str]:
         """Get list of all available log tables."""
