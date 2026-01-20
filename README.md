@@ -109,6 +109,34 @@ logger = Mogger("mogger_config.yaml", loki_config=loki_config)
 logger = Mogger("mogger_config.yaml", loki_config=loki_config, use_local_db=False)
 ```
 
+### Generate Loki Deployment Configuration
+
+Mogger can generate a complete Docker Compose setup for Loki + Grafana + Alloy:
+
+```python
+from mogger import Mogger
+
+logger = Mogger("mogger_config.yaml")
+
+# Generate Loki config in current directory (creates 'loki-config' folder)
+config_path = logger.generate_loki_config()
+
+# Or specify custom location
+config_path = logger.generate_loki_config(destination="./my-monitoring")
+
+# Deploy the stack
+# cd loki-config
+# docker-compose up -d
+# Access Grafana at http://localhost:3000
+```
+
+The generated configuration includes:
+- Loki for log aggregation
+- Grafana for visualization
+- Alloy for log collection
+- Pre-configured dashboards
+- Docker Compose setup for easy deployment
+
 ## Logging Control Parameters
 
 All logging methods (`debug`, `info`, `warning`, `error`, `critical`) support these parameters:

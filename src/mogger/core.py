@@ -3,6 +3,7 @@ Mogger - A custom logging library with SQLite persistence and terminal output.
 """
 
 import uuid as uuid_lib
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -275,6 +276,84 @@ class Mogger:
     def get_tables(self) -> List[str]:
         """Get list of all available log tables."""
         return self.__db_manager.get_tables()
+
+    def generate_loki_config(self, destination: Optional[Union[str, Path]] = None) -> Path:
+        """
+        Generate Loki configuration directory with Docker Compose setup.
+        
+        This creates a complete Loki + Grafana + Alloy setup that can be deployed
+        using Docker Compose for centralized logging.
+        
+        Args:
+            destination: Target directory path. If None, creates 'loki-config' in 
+                        current working directory. Creates parent directories if needed.
+        
+        Returns:
+            Path to the created configuration directory
+            
+        Raises:
+            FileExistsError: If destination directory already exists
+            RuntimeError: If copying configuration fails
+            
+        Example:
+            >>> logger = Mogger("config.yaml")
+            >>> config_path = logger.generate_loki_config()
+            >>> print(f"Loki config created at: {config_path}")
+            >>> # Deploy with: cd loki-config && docker-compose up -d
+        """
+        # Determine destination path
+        if destination is None:
+            dest_path = Path.cwd() / "loki-config"
+        else:
+            dest_path = Path(destination)
+        
+        # Check if destination already exists
+        if dest_path.exists():
+            raise FileExistsError(
+                f"Directory already exists: {dest_path}\n"
+                f"Please remove it first or choose a different destination."
+            )
+        
+        # Get source loki_config directory from package
+        source_path = Path(__file__).parent / "loki_config"
+        
+        if not source_path.exists():
+            raise RuntimeError(
+                f"Loki configuration template not found at: {source_path}\n"
+                f"Please reinstall the package."
+            )
+        
+        try:
+            # Create destination directory and copy contents
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(source_path, dest_path)
+            
+            # Print success message
+            self.__console.print(
+                f"✅ Loki configuration created at: {dest_path}",
+                style="green bold"
+            )
+            self.__console.print(
+                f"\n📦 To deploy Loki + Grafana:",
+                style="cyan"
+            )
+            self.__console.print(
+                f"   cd {dest_path}\n"
+                f"   docker-compose up -d",
+                style="white"
+            )
+            self.__console.print(
+                f"\n🌐 Access Grafana at: http://localhost:3000",
+                style="cyan"
+            )
+            
+            return dest_path
+            
+        except Exception as e:
+            # Clean up partial copy if something went wrong
+            if dest_path.exists():
+                shutil.rmtree(dest_path)
+            raise RuntimeError(f"Failed to generate Loki configuration: {e}")
 
     def close(self) -> None:
         """Close database connections."""

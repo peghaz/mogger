@@ -1,0 +1,53 @@
+services:
+  loki:
+    image: grafana/loki:${LOKI_IMAGE_TAG:-3.6.3}
+    container_name: loki
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${LOKI_PORT:-3100}:3100"
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    environment:
+      - LOKI_AUTH_USERNAME=${LOKI_AUTH_USERNAME:-loki}
+      - LOKI_AUTH_PASSWORD=${LOKI_AUTH_PASSWORD:-changeme}
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki_data:/loki
+
+  grafana:
+    image: grafana/grafana:${GRAFANA_IMAGE_TAG:-12.0.8}
+    container_name: grafana
+    restart: unless-stopped
+    depends_on:
+      - loki
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_DOMAIN=${GRAFANA_DOMAIN:-localhost}
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:${GRAFANA_PORT:-3000}}
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+  alloy:
+    image: grafana/alloy:${ALLOY_IMAGE_TAG:-latest}
+    container_name: alloy
+    restart: unless-stopped
+    depends_on:
+      - loki
+    ports:
+      - "${ALLOY_PORT:-12345}:12345"
+    command: ["run", "/etc/alloy/config.alloy", "--server.http.listen-addr=0.0.0.0:12345", "--storage.path=/var/lib/alloy/data"]
+    environment:
+      - LOKI_AUTH_USERNAME=${LOKI_AUTH_USERNAME:-loki}
+      - LOKI_AUTH_PASSWORD=${LOKI_AUTH_PASSWORD:-changeme}
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ./logs:/var/log/mogger:ro
+      - alloy_data:/var/lib/alloy
+
+volumes:
+  loki_data:
+  grafana_data:
+  alloy_data:
