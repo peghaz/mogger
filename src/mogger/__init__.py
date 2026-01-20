@@ -1,4 +1,5 @@
 import toml
+
 from .core import Mogger
 from .loki import LokiConfig, LokiLogger
 
