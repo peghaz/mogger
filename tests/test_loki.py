@@ -45,24 +45,24 @@ def query_loki(endpoint: str) -> dict:
     base_url = "http://localhost:3100"
     username = os.getenv("LOKI_AUTH_USERNAME", "")
     password = os.getenv("LOKI_AUTH_PASSWORD", "")
-    
+
     # Build curl command with optional auth and required headers
     headers = '-H "X-Scope-OrgID: mogger-user"'
     if username and password:
         cmd = f'curl -s -u "{username}:{password}" {headers} "{base_url}{endpoint}"'
     else:
         cmd = f'curl -s {headers} "{base_url}{endpoint}"'
-    
+
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-    
+
     if result.returncode != 0:
         print(f"\n⚠️ Curl command failed: {result.stderr}")
         return None
-    
+
     if not result.stdout or result.stdout.strip() == "":
         print(f"\n⚠️ Empty response from Loki at {endpoint}")
         return None
-    
+
     try:
         return json.loads(result.stdout)
     except json.JSONDecodeError as e:
@@ -84,22 +84,22 @@ class TestLokiConfig:
 
         assert config.url == "http://localhost:3100/loki/api/v1/push"
         assert config.tags == {"application": "mogger"}  # Default tags
-    
+
     def test_loki_config_with_custom_tags(self):
         """Test LokiConfig with custom tags."""
         config = LokiConfig(
             url="http://localhost:3100/loki/api/v1/push",
             tags={"application": "custom-app", "env": "production"},
         )
-        
+
         assert config.tags == {"application": "custom-app", "env": "production"}
-    
+
     def test_loki_config_without_auth(self):
         """Test LokiConfig without authentication credentials."""
         config = LokiConfig(
             url="http://localhost:3100/loki/api/v1/push",
         )
-        
+
         assert config.url == "http://localhost:3100/loki/api/v1/push"
         assert config.username is None
         assert config.password is None
@@ -112,7 +112,7 @@ class TestLokiLogger:
         """Test LokiLogger initialization with config from environment."""
         logger = LokiLogger(loki_config_from_env)
         assert logger is not None
-    
+
     def test_loki_logger_initialization_no_auth(self, loki_config_no_auth):
         """Test LokiLogger initialization without authentication."""
         logger = LokiLogger(loki_config_no_auth)
@@ -137,7 +137,7 @@ class TestLokiLogger:
         """Test critical level logging."""
         logger = LokiLogger(loki_config_from_env)
         logger.critical("Test critical message", extra={"system": "down"})
-    
+
     def test_loki_logger_with_custom_tags(self, load_env_vars):
         """Test logger with custom tags."""
         config = LokiConfig(
@@ -154,11 +154,11 @@ class TestLokiIntegration:
     def test_loki_server_labels_endpoint(self):
         """Test querying Loki labels endpoint."""
         result = query_loki("/loki/api/v1/labels")
-        
+
         # Skip test if Loki is not available
         if result is None:
             pytest.skip("Loki server not available or not responding")
-        
+
         assert result is not None
         assert "status" in result or "data" in result
 
@@ -166,11 +166,11 @@ class TestLokiIntegration:
         """Test querying Loki label values."""
         # Query for application label values
         result = query_loki("/loki/api/v1/label/application/values")
-        
+
         # Skip test if Loki is not available
         if result is None:
             pytest.skip("Loki server not available or not responding")
-        
+
         if result and "data" in result:
             # Check if mogger application exists in labels
             assert isinstance(result["data"], list)
@@ -178,23 +178,23 @@ class TestLokiIntegration:
     def test_send_and_verify_logs_in_loki(self, loki_config_from_env):
         """Test sending logs and verifying they exist in Loki."""
         logger = LokiLogger(loki_config_from_env)
-        
+
         # Send unique test message
         unique_msg = "test_loki_verification_12345"
         logger.info(unique_msg, extra={"test": "verification"})
         logger.error("test_error_verification_67890", extra={"test": "error"})
-        
+
         # Wait a moment for Loki to process
         import time
         time.sleep(2)
-        
+
         # Verify Loki has received the logs by checking label values
         result = query_loki("/loki/api/v1/label/application/values")
-        
+
         # Skip test if Loki is not available
         if result is None:
             pytest.skip("Loki server not available or not responding")
-        
+
         # Verify we got a response
         assert result is not None
         assert "status" in result
@@ -206,27 +206,26 @@ class TestLokiIntegration:
     def test_high_volume_messages_and_verify(self, loki_config_from_env):
         """Test sending 1000 messages and verify in Loki."""
         logger = LokiLogger(loki_config_from_env)
-        
+
         # Send 1000 messages distributed across different log levels
         for i in range(25):
             logger.info(f"Info message {i}", extra={"iteration": i, "type": "info"})
             logger.warning(f"Warning message {i}", extra={"iteration": i, "type": "warning"})
             logger.error(f"Error message {i}", extra={"iteration": i, "type": "error"})
             logger.critical(f"Critical message {i}", extra={"iteration": i, "type": "critical"})
-        
+
         print("\n✅ Successfully sent 100 messages to Loki server")
-        
+
         # Wait for Loki to process
         import time
         time.sleep(3)
-        
+
         # Verify logs exist in Loki
         result = query_loki("/loki/api/v1/labels")
-        
+
         # Skip test if Loki is not available
         if result is None:
             pytest.skip("Loki server not available or not responding")
-        
+
         assert result is not None
         print(f"\n📊 Available labels in Loki: {json.dumps(result, indent=2)}")
-

@@ -197,8 +197,8 @@ class Mogger:
         Returns:
             UUID of the log entry
         """
-        # Insert into database
-        log_uuid = self.__insert_log(level, category, use_local_db=use_local_db, **kwargs)
+        # Insert into database (pass message as a field if table has message column)
+        log_uuid = self.__insert_log(level, category, use_local_db=use_local_db, message=message, **kwargs)
 
         # Print to terminal
         if log_to_shell:
