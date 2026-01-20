@@ -35,7 +35,7 @@ class Mogger:
     ERROR = "ERROR"
     CRITICAL = "CRITICAL"
 
-    def __init__(self, config_path: Optional[Union[str, Path]] = None, db_path: Optional[str] = None, loki_config: Optional[LokiConfig] = None):
+    def __init__(self, config_path: Optional[Union[str, Path]] = None, db_path: Optional[str] = None, loki_config: Optional[LokiConfig] = None, use_local_db: bool = True):
         """
         Initialize Mogger with configuration file.
 
@@ -45,6 +45,7 @@ class Mogger:
                         in the current working directory.
             db_path: Optional override for database path
             loki_config: Optional LokiConfig for sending logs to Loki server
+            use_local_db: Whether to initialize and use local database (default: True)
         """
         self.__config_path = self.__find_config_file(config_path)
         self.__config: Optional[MoggerConfig] = None
@@ -52,6 +53,7 @@ class Mogger:
         self.__context_data: Dict[str, Any] = {}
         self.__console = Console()  # Rich console for colored output
         self.__loki_logger: Optional[LokiLogger] = None
+        self.__use_local_db = use_local_db
 
         # Load and validate configuration
         self.__load_config()
@@ -60,8 +62,9 @@ class Mogger:
         if db_path:
             self.__config.database.path = db_path
 
-        # Initialize database manager
-        self.__db_manager = DatabaseManager(self.__config)
+        # Initialize database manager only if use_local_db is True
+        if self.__use_local_db:
+            self.__db_manager = DatabaseManager(self.__config)
         
         # Initialize Loki logger if config provided
         if loki_config is not None:
@@ -148,9 +151,15 @@ class Mogger:
         # Print with color using rich
         self.__console.print(formatted_msg, style=color)
     
-    def __insert_log(self, level: str, category: str, **kwargs) -> str:
+    def __insert_log(self, level: str, category: str, use_local_db: bool = True, **kwargs) -> str:
         """
         Insert a log entry into the database.
+
+        Args:
+            level: Log level
+            category: Log category/table
+            use_local_db: Whether to insert into local database
+            **kwargs: Additional fields
 
         Returns:
             UUID of the created log entry
@@ -159,19 +168,20 @@ class Mogger:
         log_uuid = str(uuid_lib.uuid4())
         created_at = datetime.now()
         
-        # Use database manager to insert log
-        self.__db_manager.insert_log(
-            log_uuid=log_uuid,
-            level=level,
-            table=category,
-            created_at=created_at,
-            context_data=self.__context_data,
-            **kwargs
-        )
+        # Use database manager to insert log only if enabled
+        if use_local_db and self.__use_local_db and self.__db_manager is not None:
+            self.__db_manager.insert_log(
+                log_uuid=log_uuid,
+                level=level,
+                table=category,
+                created_at=created_at,
+                context_data=self.__context_data,
+                **kwargs
+            )
 
         return log_uuid
 
-    def log(self, level: str, message: str, category: str, **kwargs) -> str:
+    def log(self, level: str, message: str, category: str, use_local_db: bool = True, log_to_shell: bool = True, **kwargs) -> str:
         """
         Log a message with custom level.
 
@@ -179,16 +189,19 @@ class Mogger:
             level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
             message: Log message
             category: Target category/table name
+            use_local_db: Whether to log to local database (default: True)
+            log_to_shell: Whether to log to terminal/shell (default: True)
             **kwargs: Additional fields matching table schema
 
         Returns:
             UUID of the log entry
         """
         # Insert into database
-        log_uuid = self.__insert_log(level, category, **kwargs)
+        log_uuid = self.__insert_log(level, category, use_local_db=use_local_db, **kwargs)
 
         # Print to terminal
-        self.__print_to_terminal(level, category, log_uuid, message, **kwargs)
+        if log_to_shell:
+            self.__print_to_terminal(level, category, log_uuid, message, **kwargs)
         
         # Send to Loki if configured
         if self.__loki_logger is not None:
@@ -213,25 +226,25 @@ class Mogger:
 
         return log_uuid
 
-    def debug(self, message: str, category: str, **kwargs) -> str:
+    def debug(self, message: str, category: str, use_local_db: bool = True, log_to_shell: bool = True, **kwargs) -> str:
         """Log a DEBUG message."""
-        return self.log(self.DEBUG, message, category, **kwargs)
+        return self.log(self.DEBUG, message, category, use_local_db=use_local_db, log_to_shell=log_to_shell, **kwargs)
 
-    def info(self, message: str, category: str, **kwargs) -> str:
+    def info(self, message: str, category: str, use_local_db: bool = True, log_to_shell: bool = True, **kwargs) -> str:
         """Log an INFO message."""
-        return self.log(self.INFO, message, category, **kwargs)
+        return self.log(self.INFO, message, category, use_local_db=use_local_db, log_to_shell=log_to_shell, **kwargs)
 
-    def warning(self, message: str, category: str, **kwargs) -> str:
+    def warning(self, message: str, category: str, use_local_db: bool = True, log_to_shell: bool = True, **kwargs) -> str:
         """Log a WARNING message."""
-        return self.log(self.WARNING, message, category, **kwargs)
+        return self.log(self.WARNING, message, category, use_local_db=use_local_db, log_to_shell=log_to_shell, **kwargs)
 
-    def error(self, message: str, category: str, **kwargs) -> str:
+    def error(self, message: str, category: str, use_local_db: bool = True, log_to_shell: bool = True, **kwargs) -> str:
         """Log an ERROR message."""
-        return self.log(self.ERROR, message, category, **kwargs)
+        return self.log(self.ERROR, message, category, use_local_db=use_local_db, log_to_shell=log_to_shell, **kwargs)
 
-    def critical(self, message: str, category: str, **kwargs) -> str:
+    def critical(self, message: str, category: str, use_local_db: bool = True, log_to_shell: bool = True, **kwargs) -> str:
         """Log a CRITICAL message."""
-        return self.log(self.CRITICAL, message, category, **kwargs)
+        return self.log(self.CRITICAL, message, category, use_local_db=use_local_db, log_to_shell=log_to_shell, **kwargs)
 
     def set_terminal(self, enabled: bool) -> None:
         """Enable or disable terminal output."""

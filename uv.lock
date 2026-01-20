@@ -210,12 +210,6 @@ wheels = [
 ]
 
 [[package]]
-name = "cprint"
-version = "1.2.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/54/de/2961e14022de7149375301c14aae3ce64e869eb25f81a2149893c3e6fb4f/cprint-1.2.2.tar.gz", hash = "sha256:83469274db24939b27a9b3a03d5298fec6f07408c3175dc0fc21d5ba206f51c8", size = 2287, upload-time = "2021-03-19T11:03:45.779Z" }
-
-[[package]]
 name = "cryptography"
 version = "46.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -575,7 +569,6 @@ name = "mogger"
 version = "0.2.1"
 source = { virtual = "." }
 dependencies = [
-    { name = "cprint" },
     { name = "pydantic" },
     { name = "pytest" },
     { name = "python-dotenv" },
@@ -606,7 +599,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.4.0" },
-    { name = "cprint", specifier = ">=1.2.2" },
     { name = "pip", marker = "extra == 'dev'", specifier = ">=25.3" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pytest", specifier = ">=9.0.2" },
