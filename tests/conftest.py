@@ -8,8 +8,6 @@ from pathlib import Path
 
 import pytest
 
-from mogger import Mogger
-
 
 def pytest_sessionstart(session):
     """
@@ -18,7 +16,7 @@ def pytest_sessionstart(session):
     """
     project_root = Path(__file__).parent.parent
     print("\n🔧 Installing mogger package in editable mode...")
-    
+
     try:
         result = subprocess.run(
             ["uv", "pip", "install", "-e", "."],
@@ -51,11 +49,14 @@ def clean_test_db(test_db_path):
     # Remove before test if it exists from previous run
     if test_db_path.exists():
         test_db_path.unlink()
-    
+
     yield
-    
+
     # Keep the database after tests for inspection
     # It will be deleted in the next test run
+
+
+from mogger import Mogger
 
 
 @pytest.fixture
