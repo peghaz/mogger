@@ -20,6 +20,9 @@ from sqlalchemy import (
     Table,
     Text,
     create_engine,
+    or_,
+    desc,
+    asc,
 )
 from sqlalchemy.orm import sessionmaker
 
@@ -268,6 +271,301 @@ class DatabaseManager:
     def table_exists(self, table: str) -> bool:
         """Check if a table exists in the configuration."""
         return table in self.__tables
+    
+    def query_latest(self, table: str, limit: int = 10, **filters) -> List[Dict[str, Any]]:
+        """
+        Query the most recent logs from a specific table.
+        
+        Args:
+            table: Table name to query (can be 'logs_master' or any configured table)
+            limit: Maximum number of results (default: 10)
+            **filters: Field filters (e.g., log_level="ERROR")
+        
+        Returns:
+            List of log entries as dictionaries, ordered by most recent first
+            
+        Raises:
+            ValueError: If table not found
+        """
+        if table == 'logs_master':
+            table_obj = self.__master_table
+            order_column = self.__master_table.c.created_at
+        elif table in self.__tables:
+            # For custom tables, we'll join with master table to get created_at
+            return self.__query_with_order(table, order_column='created_at', 
+                                          ascending=False, limit=limit, **filters)
+        else:
+            raise ValueError(f"Table '{table}' not found")
+        
+        session = self.__session_factory()
+        
+        try:
+            query = session.query(table_obj)
+            
+            # Apply filters
+            for field, value in filters.items():
+                if hasattr(table_obj.c, field):
+                    query = query.filter(getattr(table_obj.c, field) == value)
+            
+            # Order by created_at descending (most recent first)
+            query = query.order_by(desc(order_column)).limit(limit)
+            
+            results = query.all()
+            return [dict(row._mapping) for row in results]
+        
+        finally:
+            session.close()
+    
+    def query_oldest(self, table: str, limit: int = 10, **filters) -> List[Dict[str, Any]]:
+        """
+        Query the oldest logs from a specific table.
+        
+        Args:
+            table: Table name to query (can be 'logs_master' or any configured table)
+            limit: Maximum number of results (default: 10)
+            **filters: Field filters (e.g., log_level="ERROR")
+        
+        Returns:
+            List of log entries as dictionaries, ordered by oldest first
+            
+        Raises:
+            ValueError: If table not found
+        """
+        if table == 'logs_master':
+            table_obj = self.__master_table
+            order_column = self.__master_table.c.created_at
+        elif table in self.__tables:
+            # For custom tables, we'll join with master table to get created_at
+            return self.__query_with_order(table, order_column='created_at', 
+                                          ascending=True, limit=limit, **filters)
+        else:
+            raise ValueError(f"Table '{table}' not found")
+        
+        session = self.__session_factory()
+        
+        try:
+            query = session.query(table_obj)
+            
+            # Apply filters
+            for field, value in filters.items():
+                if hasattr(table_obj.c, field):
+                    query = query.filter(getattr(table_obj.c, field) == value)
+            
+            # Order by created_at ascending (oldest first)
+            query = query.order_by(asc(order_column)).limit(limit)
+            
+            results = query.all()
+            return [dict(row._mapping) for row in results]
+        
+        finally:
+            session.close()
+    
+    def query_between_timestamps(self, table: str, start_time: datetime, 
+                                 end_time: datetime, limit: Optional[int] = None, 
+                                 **filters) -> List[Dict[str, Any]]:
+        """
+        Query logs between two timestamps.
+        
+        Args:
+            table: Table name to query (can be 'logs_master' or any configured table)
+            start_time: Start timestamp (inclusive)
+            end_time: End timestamp (inclusive)
+            limit: Maximum number of results (optional)
+            **filters: Field filters (e.g., log_level="ERROR")
+        
+        Returns:
+            List of log entries as dictionaries, ordered by most recent first
+            
+        Raises:
+            ValueError: If table not found or start_time > end_time
+        """
+        if start_time > end_time:
+            raise ValueError("start_time must be before or equal to end_time")
+        
+        if table == 'logs_master':
+            table_obj = self.__master_table
+            time_column = self.__master_table.c.created_at
+        elif table in self.__tables:
+            # For custom tables, join with master to get created_at
+            return self.__query_with_time_range(table, start_time, end_time, limit, **filters)
+        else:
+            raise ValueError(f"Table '{table}' not found")
+        
+        session = self.__session_factory()
+        
+        try:
+            query = session.query(table_obj)
+            
+            # Apply time range filter
+            query = query.filter(time_column >= start_time, time_column <= end_time)
+            
+            # Apply additional filters
+            for field, value in filters.items():
+                if hasattr(table_obj.c, field):
+                    query = query.filter(getattr(table_obj.c, field) == value)
+            
+            # Order by created_at descending (most recent first)
+            query = query.order_by(desc(time_column))
+            
+            if limit:
+                query = query.limit(limit)
+            
+            results = query.all()
+            return [dict(row._mapping) for row in results]
+        
+        finally:
+            session.close()
+    
+    def search_keyword(self, table: str, keyword: str, fields: Optional[List[str]] = None,
+                      limit: Optional[int] = None, **filters) -> List[Dict[str, Any]]:
+        """
+        Search for logs containing a keyword in specified fields.
+        
+        Args:
+            table: Table name to query (cannot be 'logs_master' as it has no text fields)
+            keyword: Keyword to search for (case-insensitive)
+            fields: List of field names to search in. If None, searches all string/text fields
+            limit: Maximum number of results (optional)
+            **filters: Additional field filters (e.g., log_level="ERROR")
+        
+        Returns:
+            List of log entries as dictionaries where at least one field contains the keyword
+            
+        Raises:
+            ValueError: If table not found or is logs_master
+        """
+        if table == 'logs_master':
+            raise ValueError("Keyword search is not supported on logs_master table")
+        
+        if table not in self.__tables:
+            raise ValueError(f"Table '{table}' not found")
+        
+        table_obj = self.__tables[table]['table']
+        table_config = self.__tables[table]['config']
+        
+        # Determine which fields to search
+        if fields is None:
+            # Search all string and text fields
+            search_fields = [
+                field.name for field in table_config.fields 
+                if field.type in ['string', 'text']
+            ]
+        else:
+            # Validate provided fields exist
+            available_fields = {field.name for field in table_config.fields}
+            search_fields = []
+            for field in fields:
+                if field not in available_fields:
+                    raise ValueError(f"Field '{field}' not found in table '{table}'")
+                search_fields.append(field)
+        
+        if not search_fields:
+            raise ValueError(f"No searchable text fields found in table '{table}'")
+        
+        session = self.__session_factory()
+        
+        try:
+            query = session.query(table_obj)
+            
+            # Build OR condition for keyword search across fields
+            or_conditions = []
+            for field_name in search_fields:
+                if hasattr(table_obj.c, field_name):
+                    column = getattr(table_obj.c, field_name)
+                    # Case-insensitive search using LIKE
+                    or_conditions.append(column.ilike(f"%{keyword}%"))
+            
+            if or_conditions:
+                query = query.filter(or_(*or_conditions))
+            
+            # Apply additional filters
+            for field, value in filters.items():
+                if hasattr(table_obj.c, field):
+                    query = query.filter(getattr(table_obj.c, field) == value)
+            
+            # Apply limit
+            if limit:
+                query = query.limit(limit)
+            
+            results = query.all()
+            return [dict(row._mapping) for row in results]
+        
+        finally:
+            session.close()
+    
+    def __query_with_order(self, table: str, order_column: str, ascending: bool = True,
+                          limit: Optional[int] = None, **filters) -> List[Dict[str, Any]]:
+        """
+        Helper method to query custom tables with ordering by joining with master table.
+        """
+        table_obj = self.__tables[table]['table']
+        session = self.__session_factory()
+        
+        try:
+            # Join custom table with master table on log_uuid
+            query = session.query(table_obj).join(
+                self.__master_table,
+                table_obj.c.log_uuid == self.__master_table.c.uuid
+            )
+            
+            # Apply filters on custom table columns
+            for field, value in filters.items():
+                if hasattr(table_obj.c, field):
+                    query = query.filter(getattr(table_obj.c, field) == value)
+            
+            # Order by master table's created_at
+            if ascending:
+                query = query.order_by(asc(self.__master_table.c.created_at))
+            else:
+                query = query.order_by(desc(self.__master_table.c.created_at))
+            
+            if limit:
+                query = query.limit(limit)
+            
+            results = query.all()
+            return [dict(row._mapping) for row in results]
+        
+        finally:
+            session.close()
+    
+    def __query_with_time_range(self, table: str, start_time: datetime, 
+                               end_time: datetime, limit: Optional[int] = None,
+                               **filters) -> List[Dict[str, Any]]:
+        """
+        Helper method to query custom tables with time range by joining with master table.
+        """
+        table_obj = self.__tables[table]['table']
+        session = self.__session_factory()
+        
+        try:
+            # Join custom table with master table on log_uuid
+            query = session.query(table_obj).join(
+                self.__master_table,
+                table_obj.c.log_uuid == self.__master_table.c.uuid
+            )
+            
+            # Apply time range filter on master table
+            query = query.filter(
+                self.__master_table.c.created_at >= start_time,
+                self.__master_table.c.created_at <= end_time
+            )
+            
+            # Apply additional filters on custom table columns
+            for field, value in filters.items():
+                if hasattr(table_obj.c, field):
+                    query = query.filter(getattr(table_obj.c, field) == value)
+            
+            # Order by created_at descending (most recent first)
+            query = query.order_by(desc(self.__master_table.c.created_at))
+            
+            if limit:
+                query = query.limit(limit)
+            
+            results = query.all()
+            return [dict(row._mapping) for row in results]
+        
+        finally:
+            session.close()
     
     def close(self) -> None:
         """Close database connections and dispose of engine."""

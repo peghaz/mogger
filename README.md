@@ -246,6 +246,89 @@ user_errors = logger.query(category="errors", user_id="123")
 recent = logger.query(category="user_actions", limit=50)
 ```
 
+### Advanced Search
+
+#### Query Latest Logs
+
+```python
+# Get the 10 most recent logs
+latest = logger.query_latest("logs_master", limit=10)
+
+# Get latest logs with filters
+latest_errors = logger.query_latest("logs_master", limit=5, log_level="ERROR")
+latest_user_actions = logger.query_latest("user_actions", limit=20, user_id="123")
+```
+
+#### Query Oldest Logs
+
+```python
+# Get the 10 oldest logs
+oldest = logger.query_oldest("logs_master", limit=10)
+
+# Get oldest logs with filters
+first_errors = logger.query_oldest("errors", limit=5, severity="critical")
+```
+
+#### Query by Time Range
+
+```python
+from datetime import datetime, timedelta
+
+# Get logs from the last hour
+end_time = datetime.now()
+start_time = end_time - timedelta(hours=1)
+recent_logs = logger.query_between_timestamps(
+    "logs_master", 
+    start_time, 
+    end_time
+)
+
+# Get logs from specific time range with filters
+errors_in_range = logger.query_between_timestamps(
+    "logs_master",
+    start_time,
+    end_time,
+    limit=100,
+    log_level="ERROR"
+)
+
+# Query custom table in time range
+user_actions = logger.query_between_timestamps(
+    "user_actions",
+    start_time,
+    end_time,
+    user_id="123"
+)
+```
+
+#### Search by Keyword
+
+```python
+# Search for logs containing a keyword in any text field
+results = logger.search_keyword("errors", "database")
+
+# Search in specific fields
+results = logger.search_keyword(
+    "errors", 
+    "connection", 
+    fields=["error_message"]
+)
+
+# Search with additional filters
+results = logger.search_keyword(
+    "errors",
+    "timeout",
+    fields=["error_message", "error_details"],
+    severity="high",
+    limit=50
+)
+
+# Search is case-insensitive and matches partial strings
+results = logger.search_keyword("user_actions", "admin")  # Matches "admin", "Admin", "administrator"
+```
+
+**Note:** All advanced search methods require `use_local_db=True` (default) at initialization.
+
 ## Use Cases
 
 ### Scenario 1: Production with Loki + Local Database
