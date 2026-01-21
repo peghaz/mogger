@@ -271,9 +271,9 @@ class DatabaseManager:
         """Check if a table exists in the configuration."""
         return table in self.__tables
 
-    def query_latest(self, table: str, limit: int = 10, **filters) -> List[Dict[str, Any]]:
+    def get_latest_logs(self, table: str, limit: int = 10, **filters) -> List[Dict[str, Any]]:
         """
-        Query the most recent logs from a specific table.
+        Get the most recent logs from a specific table.
 
         Args:
             table: Table name to query (can be 'logs_master' or any configured table)
@@ -315,9 +315,9 @@ class DatabaseManager:
         finally:
             session.close()
 
-    def query_oldest(self, table: str, limit: int = 10, **filters) -> List[Dict[str, Any]]:
+    def get_oldest_logs(self, table: str, limit: int = 10, **filters) -> List[Dict[str, Any]]:
         """
-        Query the oldest logs from a specific table.
+        Get the oldest logs from a specific table.
 
         Args:
             table: Table name to query (can be 'logs_master' or any configured table)
@@ -359,11 +359,11 @@ class DatabaseManager:
         finally:
             session.close()
 
-    def query_between_timestamps(self, table: str, start_time: datetime,
-                                 end_time: datetime, limit: Optional[int] = None,
-                                 **filters) -> List[Dict[str, Any]]:
+    def get_logs_between(self, table: str, start_time: datetime,
+                         end_time: datetime, limit: Optional[int] = None,
+                         **filters) -> List[Dict[str, Any]]:
         """
-        Query logs between two timestamps.
+        Get logs between two timestamps.
 
         Args:
             table: Table name to query (can be 'logs_master' or any configured table)
@@ -415,11 +415,9 @@ class DatabaseManager:
         finally:
             session.close()
 
-    def search_keyword(self, table: str, keyword: str, fields: Optional[List[str]] = None,
-                       limit: Optional[int] = None, **filters) -> List[Dict[str, Any]]:
+    def search_logs(self, table: str, keyword: str, fields: Optional[List[str]] = None,
+                    limit: Optional[int] = None, **filters) -> List[Dict[str, Any]]:
         """
-        Search for logs containing a keyword in specified fields.
-
         Args:
             table: Table name to query (cannot be 'logs_master' as it has no text fields)
             keyword: Keyword to search for (case-insensitive)
