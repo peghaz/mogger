@@ -45,17 +45,3 @@ class LokiLogger:
 
     def debug(self, message: str, extra: Dict = {}):
         self.__logger.debug(message, extra=extra)
-
-    def log(self, level: str, message: str, **kwargs):
-        log_record = logging.LogRecord(
-            name="mogger",
-            level=getattr(logging, level.upper(), logging.INFO),
-            pathname="",
-            lineno=0,
-            msg=message,
-            args=(),
-            exc_info=None,
-        )
-        for key, value in kwargs.items():
-            setattr(log_record, key, value)
-        self.logger.emit(log_record)
