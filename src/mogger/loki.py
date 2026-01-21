@@ -29,6 +29,7 @@ class LokiLogger:
             }
         )
         self.__logger = logging.getLogger("mogger")
+        self.__logger.setLevel(logging.DEBUG)
         self.__logger.addHandler(loki_handler)
 
     def info(self, message: str, extra: Dict = {}):
