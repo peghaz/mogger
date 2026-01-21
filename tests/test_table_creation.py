@@ -2,9 +2,8 @@
 Tests to verify that tables defined in config are properly created in the database.
 """
 
-import pytest
 import sqlite3
-from pathlib import Path
+import pytest
 
 
 class TestTableCreation:
@@ -385,7 +384,7 @@ tables:
         config_path.write_text(config_content)
 
         db_path = tmp_path / "test_wal.db"
-        logger = Mogger(str(config_path), db_path=str(db_path))
+        _ = Mogger(str(config_path), db_path=str(db_path))
 
         # Check WAL mode
         conn = sqlite3.connect(db_path)

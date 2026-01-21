@@ -22,7 +22,7 @@ class TestQueryLatest:
         uuid3 = logger.info("Log 3", category="user_actions", user_id="u3", action="a3")
         
         # Query latest 2 logs
-        results = logger.query_latest("logs_master", limit=2)
+        results = logger.get_latest_logs("logs_master", limit=2)
         assert len(results) == 2
         # Most recent should be first
         result_uuids = [r["uuid"] for r in results]
@@ -38,7 +38,7 @@ class TestQueryLatest:
         logger.info("Action 3", category="user_actions", user_id="u3", action="view")
         
         # Query latest 2
-        results = logger.query_latest("user_actions", limit=2)
+        results = logger.get_latest_logs("user_actions", limit=2)
         assert len(results) == 2
         # Check that we got the most recent ones
         actions = [r["action"] for r in results]
@@ -57,7 +57,7 @@ class TestQueryLatest:
         logger.error("Error 2", category="errors", error_code=404, error_message="e2", severity="low")
         
         # Query latest ERROR logs only
-        results = logger.query_latest("logs_master", limit=10, log_level="ERROR")
+        results = logger.get_latest_logs("logs_master", limit=10, log_level="ERROR")
         assert len(results) == 2
         assert all(r["log_level"] == "ERROR" for r in results)
         # Most recent error should be first
@@ -65,13 +65,13 @@ class TestQueryLatest:
     
     def test_query_latest_empty_table(self, logger):
         """Test querying latest from empty table."""
-        results = logger.query_latest("user_actions", limit=10)
+        results = logger.get_latest_logs("user_actions", limit=10)
         assert results == []
     
     def test_query_latest_invalid_table(self, logger):
         """Test querying latest from non-existent table."""
         with pytest.raises(ValueError, match="Table.*not found"):
-            logger.query_latest("nonexistent_table")
+            logger.get_latest_logs("nonexistent_table")
 
 
 class TestQueryOldest:
@@ -87,7 +87,7 @@ class TestQueryOldest:
         uuid3 = logger.info("Log 3", category="user_actions", user_id="u3", action="a3")
         
         # Query oldest 2 logs
-        results = logger.query_oldest("logs_master", limit=2)
+        results = logger.get_oldest_logs("logs_master", limit=2)
         assert len(results) == 2
         # Oldest should be first
         result_uuids = [r["uuid"] for r in results]
@@ -103,7 +103,7 @@ class TestQueryOldest:
         logger.info("Action 3", category="user_actions", user_id="u3", action="view")
         
         # Query oldest 2
-        results = logger.query_oldest("user_actions", limit=2)
+        results = logger.get_oldest_logs("user_actions", limit=2)
         assert len(results) == 2
         # Check that we got the oldest ones
         actions = [r["action"] for r in results]
@@ -120,7 +120,7 @@ class TestQueryOldest:
         logger.info("Info 2", category="system_events", event_type="info", description="i2")
         
         # Query oldest INFO logs only
-        results = logger.query_oldest("logs_master", limit=10, log_level="INFO")
+        results = logger.get_oldest_logs("logs_master", limit=10, log_level="INFO")
         assert len(results) == 2
         assert all(r["log_level"] == "INFO" for r in results)
         # Verify we got info logs
@@ -155,7 +155,7 @@ class TestQueryBetweenTimestamps:
         uuid_after = logger.info("After", category="user_actions", user_id="u3", action="after")
         
         # Query between middle and end
-        results = logger.query_between_timestamps("logs_master", middle_time, end_time)
+        results = logger.get_logs_between("logs_master", middle_time, end_time)
         
         # Should get the "during" log
         assert len(results) >= 1
@@ -178,7 +178,7 @@ class TestQueryBetweenTimestamps:
         logger.info("Log 3", category="user_actions", user_id="u3", action="view")
         
         # Query middle period
-        results = logger.query_between_timestamps("user_actions", middle_start, middle_end)
+        results = logger.get_logs_between("user_actions", middle_start, middle_end)
         
         # Should get logs 1 and 2
         assert len(results) >= 2
@@ -196,7 +196,7 @@ class TestQueryBetweenTimestamps:
         end_time = datetime.now()
         
         # Query only ERROR logs in time range
-        results = logger.query_between_timestamps("logs_master", start_time, end_time, 
+        results = logger.get_logs_between("logs_master", start_time, end_time, 
                                                   log_level="ERROR")
         assert len(results) == 1
         assert results[0]["log_level"] == "ERROR"
@@ -213,7 +213,7 @@ class TestQueryBetweenTimestamps:
         end_time = datetime.now()
         
         # Query with limit
-        results = logger.query_between_timestamps("logs_master", start_time, end_time, limit=3)
+        results = logger.get_logs_between("logs_master", start_time, end_time, limit=3)
         assert len(results) == 3
     
     def test_query_between_timestamps_invalid_range(self, logger):
@@ -222,7 +222,7 @@ class TestQueryBetweenTimestamps:
         end_time = start_time - timedelta(hours=1)
         
         with pytest.raises(ValueError, match="start_time must be before"):
-            logger.query_between_timestamps("logs_master", start_time, end_time)
+            logger.get_logs_between("logs_master", start_time, end_time)
     
     def test_query_between_timestamps_empty_range(self, logger):
         """Test querying a time range with no logs."""
@@ -233,7 +233,7 @@ class TestQueryBetweenTimestamps:
         # Insert logs after the time range
         logger.info("Log", category="user_actions", user_id="u1", action="a1")
         
-        results = logger.query_between_timestamps("logs_master", start_time, end_time)
+        results = logger.get_logs_between("logs_master", start_time, end_time)
         assert results == []
 
 
@@ -251,7 +251,7 @@ class TestSearchKeyword:
                     error_code=503, error_message="Network unreachable", severity="medium")
         
         # Search for "database" in error_message field
-        results = logger.search_keyword("errors", "database", fields=["error_message"])
+        results = logger.search_logs("errors", "database", fields=["error_message"])
         assert len(results) == 1
         assert "Database" in results[0]["error_message"]
     
@@ -263,7 +263,7 @@ class TestSearchKeyword:
         logger.info("View page", category="user_actions", user_id="guest", action="admin_panel")
         
         # Search for "admin" in both user_id and action fields
-        results = logger.search_keyword("user_actions", "admin", 
+        results = logger.search_logs("user_actions", "admin", 
                                        fields=["user_id", "action"])
         assert len(results) == 2
         # Should find both the admin user and the admin_panel action
@@ -277,7 +277,7 @@ class TestSearchKeyword:
                     error_code=200, error_message="OK", severity="low")
         
         # Search for "critical" without specifying fields
-        results = logger.search_keyword("errors", "critical")
+        results = logger.search_logs("errors", "critical")
         assert len(results) == 1
         assert "Critical" in results[0]["error_message"] or "critical" in results[0]["severity"]
     
@@ -288,9 +288,9 @@ class TestSearchKeyword:
                     error_code=500, error_message="DataBase Connection Failed", severity="high")
         
         # Search with different cases
-        results_lower = logger.search_keyword("errors", "database", fields=["error_message"])
-        results_upper = logger.search_keyword("errors", "DATABASE", fields=["error_message"])
-        results_mixed = logger.search_keyword("errors", "DaTaBaSe", fields=["error_message"])
+        results_lower = logger.search_logs("errors", "database", fields=["error_message"])
+        results_upper = logger.search_logs("errors", "DATABASE", fields=["error_message"])
+        results_mixed = logger.search_logs("errors", "DaTaBaSe", fields=["error_message"])
         
         assert len(results_lower) == 1
         assert len(results_upper) == 1
@@ -303,7 +303,7 @@ class TestSearchKeyword:
                     error_code=500, error_message="Connection timeout occurred", severity="high")
         
         # Search for partial word
-        results = logger.search_keyword("errors", "time", fields=["error_message"])
+        results = logger.search_logs("errors", "time", fields=["error_message"])
         assert len(results) == 1
         assert "timeout" in results[0]["error_message"]
     
@@ -316,7 +316,7 @@ class TestSearchKeyword:
                     error_code=404, error_message="Database not found", severity="low")
         
         # Search for "database" but only high severity
-        results = logger.search_keyword("errors", "database", 
+        results = logger.search_logs("errors", "database", 
                                        fields=["error_message"], severity="high")
         assert len(results) == 1
         assert results[0]["severity"] == "high"
@@ -329,7 +329,7 @@ class TestSearchKeyword:
                         error_code=500, error_message=f"Connection error {i}", severity="high")
         
         # Search with limit
-        results = logger.search_keyword("errors", "connection", limit=3)
+        results = logger.search_logs("errors", "connection", limit=3)
         assert len(results) == 3
     
     def test_search_keyword_no_matches(self, logger):
@@ -339,7 +339,7 @@ class TestSearchKeyword:
                     error_code=500, error_message="Network failure", severity="high")
         
         # Search for non-existent keyword
-        results = logger.search_keyword("errors", "database")
+        results = logger.search_logs("errors", "database")
         assert results == []
     
     def test_search_keyword_invalid_field(self, logger):
@@ -350,7 +350,7 @@ class TestSearchKeyword:
         
         # Search with non-existent field
         with pytest.raises(ValueError, match="Field.*not found"):
-            logger.search_keyword("errors", "test", fields=["nonexistent_field"])
+            logger.search_logs("errors", "test", fields=["nonexistent_field"])
     
     def test_search_keyword_master_table_not_allowed(self, logger):
         """Test that keyword search is not allowed on master table."""
@@ -359,12 +359,12 @@ class TestSearchKeyword:
         
         # Try to search master table
         with pytest.raises(ValueError, match="not supported on logs_master"):
-            logger.search_keyword("logs_master", "test")
+            logger.search_logs("logs_master", "test")
     
     def test_search_keyword_invalid_table(self, logger):
         """Test keyword search on non-existent table."""
         with pytest.raises(ValueError, match="Table.*not found"):
-            logger.search_keyword("nonexistent_table", "test")
+            logger.search_logs("nonexistent_table", "test")
     
     def test_search_keyword_no_text_fields(self, logger):
         """Test keyword search on table with no text fields."""
@@ -406,7 +406,7 @@ tables:
         logger = Mogger(str(config_path), use_local_db=False)
         
         with pytest.raises(RuntimeError, match="Local database is not enabled"):
-            logger.query_latest("logs_master")
+            logger.get_latest_logs("logs_master")
     
     def test_query_oldest_without_db(self, tmp_path):
         """Test query_oldest raises error when database disabled."""
@@ -436,7 +436,7 @@ tables:
         logger = Mogger(str(config_path), use_local_db=False)
         
         with pytest.raises(RuntimeError, match="Local database is not enabled"):
-            logger.query_oldest("logs_master")
+            logger.get_oldest_logs("logs_master")
     
     def test_query_between_timestamps_without_db(self, tmp_path):
         """Test query_between_timestamps raises error when database disabled."""
@@ -469,7 +469,7 @@ tables:
         end = datetime.now()
         
         with pytest.raises(RuntimeError, match="Local database is not enabled"):
-            logger.query_between_timestamps("logs_master", start, end)
+            logger.get_logs_between("logs_master", start, end)
     
     def test_search_keyword_without_db(self, tmp_path):
         """Test search_keyword raises error when database disabled."""
@@ -499,4 +499,4 @@ tables:
         logger = Mogger(str(config_path), use_local_db=False)
         
         with pytest.raises(RuntimeError, match="Local database is not enabled"):
-            logger.search_keyword("user_actions", "test")
+            logger.search_logs("user_actions", "test")
