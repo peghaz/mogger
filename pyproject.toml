@@ -29,6 +29,12 @@ package-dir = { "" = "src" }
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+mogger = [
+    "loki_config/**/*",
+    "loki_config/*",
+]
+
 [dependency-groups]
 dev = [
     "build>=1.4.0",
