@@ -39,12 +39,6 @@ def test_config_path():
 
 
 @pytest.fixture
-def test_db_path(tmp_path):
-    """Return path to temporary test database file."""
-    return str(tmp_path / "mogger_test_logs.db")
-
-
-@pytest.fixture
 def mock_loki_config():
     """Create a mock LokiConfig."""
     return LokiConfig(
@@ -161,25 +155,22 @@ class TestLokiLoggerBehavior:
 class TestMoggerLokiIntegrationAdvanced:
     """Advanced integration tests for Mogger with Loki."""
 
-    def test_mogger_loki_with_disabled_local_db(self, test_config_path, mock_loki_config):
-        """Test Mogger with Loki enabled but local DB disabled."""
+    def test_mogger_loki_with_disabled_local_csv(self, test_config_path, mock_loki_config):
+        """Test Mogger with Loki enabled but local CSV disabled."""
         mogger = Mogger(
             test_config_path,
             loki_config=mock_loki_config,
-            use_local_db=False
+            log_to_csv=False
         )
         
         # Should still send to Loki
-        uuid = mogger.info("Message without local DB", category="system_events")
+        uuid = mogger.info("Message without local CSV", category="system_events")
         assert uuid is not None
-        
-        mogger.close()
 
-    def test_mogger_logs_different_categories_to_loki(self, test_config_path, test_db_path, mock_loki_config):
+    def test_mogger_logs_different_categories_to_loki(self, test_config_path, mock_loki_config):
         """Test that different log categories are sent to Loki."""
         mogger = Mogger(
             test_config_path,
-            db_path=test_db_path,
             loki_config=mock_loki_config
         )
         
@@ -187,14 +178,11 @@ class TestMoggerLokiIntegrationAdvanced:
         mogger.info("User action", category="user_actions", user_id="user123", action="login")
         mogger.info("System event", category="system_events", event_type="startup", description="System starting")
         mogger.error("Error occurred", category="errors", error_code=500, error_message="Server error", severity="high")
-        
-        mogger.close()
 
-    def test_mogger_loki_preserves_kwargs_order(self, test_config_path, test_db_path, mock_loki_config):
+    def test_mogger_loki_preserves_kwargs_order(self, test_config_path, mock_loki_config):
         """Test that kwargs are preserved when sent to Loki."""
         mogger = Mogger(
             test_config_path,
-            db_path=test_db_path,
             loki_config=mock_loki_config
         )
         
@@ -202,20 +190,15 @@ class TestMoggerLokiIntegrationAdvanced:
             "Test message",
             category="user_actions",
             user_id="user456",
-            action="update",
-            resource="profile",
-            timestamp=1234567890,
-            success=True
+            action="update"
         )
-        
-        mogger.close()
 
-    def test_mogger_context_sent_to_loki(self, test_config_path, test_db_path, mock_loki_config):
+    def test_mogger_context_sent_to_loki(self, test_config_path, mock_loki_config):
         """Test that context data is included in Loki logs."""
         mogger = Mogger(
             test_config_path,
-            db_path=test_db_path,
-            loki_config=mock_loki_config
+            loki_config=mock_loki_config,
+            log_to_csv=False  # Context fields are not defined in schema
         )
         
         # Set context
@@ -227,10 +210,8 @@ class TestMoggerLokiIntegrationAdvanced:
         # Clear and log again
         mogger.clear_context()
         mogger.info("Message without context", category="user_actions", user_id="user123", action="view")
-        
-        mogger.close()
 
-    def test_mogger_multiple_loki_instances(self, test_config_path, test_db_path):
+    def test_mogger_multiple_loki_instances(self, test_config_path):
         """Test creating multiple Mogger instances with different Loki configs."""
         config1 = LokiConfig(
             url="http://localhost:3100/loki/api/v1/push",
@@ -242,20 +223,16 @@ class TestMoggerLokiIntegrationAdvanced:
             tags={"app": "app2", "env": "test"}
         )
         
-        mogger1 = Mogger(test_config_path, db_path=str(Path(test_db_path).parent / "db1.db"), loki_config=config1)
-        mogger2 = Mogger(test_config_path, db_path=str(Path(test_db_path).parent / "db2.db"), loki_config=config2)
+        mogger1 = Mogger(test_config_path, loki_config=config1)
+        mogger2 = Mogger(test_config_path, loki_config=config2)
         
         mogger1.info("Message from app1", category="user_actions", user_id="user1", action="test")
         mogger2.info("Message from app2", category="user_actions", user_id="user2", action="test")
-        
-        mogger1.close()
-        mogger2.close()
 
-    def test_mogger_loki_all_log_levels(self, test_config_path, test_db_path, mock_loki_config):
+    def test_mogger_loki_all_log_levels(self, test_config_path, mock_loki_config):
         """Test all log levels are sent to Loki correctly."""
         mogger = Mogger(
             test_config_path,
-            db_path=test_db_path,
             loki_config=mock_loki_config
         )
         
@@ -272,27 +249,21 @@ class TestMoggerLokiIntegrationAdvanced:
                 mogger.error(f"{level} message", category="system_events", event_type="test", description=f"{level} test")
             elif level == "CRITICAL":
                 mogger.critical(f"{level} message", category="system_events", event_type="test", description=f"{level} test")
-        
-        mogger.close()
 
-    def test_mogger_loki_with_shell_disabled(self, test_config_path, test_db_path, mock_loki_config):
+    def test_mogger_loki_with_shell_disabled(self, test_config_path, mock_loki_config):
         """Test logging to Loki when terminal output is disabled."""
         mogger = Mogger(
             test_config_path,
-            db_path=test_db_path,
             loki_config=mock_loki_config
         )
         
         # Log with shell output disabled
         mogger.info("Silent log to Loki", category="user_actions", user_id="user123", action="test", log_to_shell=False)
-        
-        mogger.close()
 
-    def test_mogger_loki_batch_logging(self, test_config_path, test_db_path, mock_loki_config):
+    def test_mogger_loki_batch_logging(self, test_config_path, mock_loki_config):
         """Test sending batch of logs to Loki."""
         mogger = Mogger(
             test_config_path,
-            db_path=test_db_path,
             loki_config=mock_loki_config
         )
         
@@ -302,12 +273,8 @@ class TestMoggerLokiIntegrationAdvanced:
                 f"Batch log {i}",
                 category="user_actions",
                 user_id=f"user_{i}",
-                action="batch_test",
-                batch_id=f"batch-{i // 10}",
-                item_number=i
+                action="batch_test"
             )
-        
-        mogger.close()
 
 
 class TestLokiErrorHandling:
@@ -348,11 +315,10 @@ class TestLokiConfigDefaults:
 class TestLokiUUIDTracking:
     """Tests for UUID tracking in Loki logs."""
 
-    def test_mogger_includes_uuid_in_loki_logs(self, test_config_path, test_db_path, mock_loki_config):
+    def test_mogger_includes_uuid_in_loki_logs(self, test_config_path, mock_loki_config):
         """Test that UUID is included in extra data sent to Loki."""
         mogger = Mogger(
             test_config_path,
-            db_path=test_db_path,
             loki_config=mock_loki_config
         )
         
@@ -361,14 +327,11 @@ class TestLokiUUIDTracking:
         # UUID should be valid
         assert uuid is not None
         assert len(uuid) > 0
-        
-        mogger.close()
 
-    def test_each_log_has_unique_uuid(self, test_config_path, test_db_path, mock_loki_config):
+    def test_each_log_has_unique_uuid(self, test_config_path, mock_loki_config):
         """Test that each log gets a unique UUID."""
         mogger = Mogger(
             test_config_path,
-            db_path=test_db_path,
             loki_config=mock_loki_config
         )
         
@@ -379,5 +342,3 @@ class TestLokiUUIDTracking:
         
         # All UUIDs should be unique
         assert len(uuids) == len(set(uuids))
-        
-        mogger.close()

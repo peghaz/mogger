@@ -26,12 +26,6 @@ def test_config_path():
 
 
 @pytest.fixture
-def test_db_path(tmp_path):
-    """Return path to temporary test database file."""
-    return str(tmp_path / "mogger_test_logs.db")
-
-
-@pytest.fixture
 def loki_config_from_env(load_env_vars):
     """Create LokiConfig from environment variables if available."""
     loki_url = os.getenv("LOKI_URL")
@@ -49,32 +43,27 @@ def loki_config_from_env(load_env_vars):
 class TestMoggerLokiIntegration:
     """Tests for Mogger with Loki integration."""
 
-    def test_mogger_without_loki(self, test_config_path, test_db_path):
+    def test_mogger_without_loki(self, test_config_path):
         """Test Mogger works without Loki config."""
-        mogger = Mogger(test_config_path, db_path=test_db_path)
+        mogger = Mogger(test_config_path)
         
         # Should work without Loki
         uuid = mogger.info("Test message without Loki", category="user_actions", user_id="test_user", action="test")
         assert uuid is not None
-        
-        mogger.close()
 
-    def test_mogger_with_loki_config(self, test_config_path, test_db_path, loki_config_from_env):
+    def test_mogger_with_loki_config(self, test_config_path, loki_config_from_env):
         """Test Mogger initialization with Loki config."""
         mogger = Mogger(
             test_config_path,
-            db_path=test_db_path,
             loki_config=loki_config_from_env
         )
         
         assert mogger is not None
-        mogger.close()
 
-    def test_mogger_logs_to_loki(self, test_config_path, test_db_path, loki_config_from_env):
+    def test_mogger_logs_to_loki(self, test_config_path, loki_config_from_env):
         """Test that Mogger sends logs to Loki when configured."""
         mogger = Mogger(
             test_config_path,
-            db_path=test_db_path,
             loki_config=loki_config_from_env
         )
         
@@ -84,15 +73,13 @@ class TestMoggerLokiIntegration:
         mogger.warning("Warning message with Loki", category="errors", error_code=400, error_message="Test warning", severity="medium")
         mogger.error("Error message with Loki", category="errors", error_code=500, error_message="Test error", severity="high")
         mogger.critical("Critical message with Loki", category="errors", error_code=503, error_message="Test critical", severity="critical")
-        
-        mogger.close()
 
-    def test_mogger_loki_with_context(self, test_config_path, test_db_path, loki_config_from_env):
+    def test_mogger_loki_with_context(self, test_config_path, loki_config_from_env):
         """Test that context data is sent to Loki."""
         mogger = Mogger(
             test_config_path,
-            db_path=test_db_path,
-            loki_config=loki_config_from_env
+            loki_config=loki_config_from_env,
+            log_to_csv=False  # Context fields are not defined in schema
         )
         
         # Set context
@@ -102,13 +89,11 @@ class TestMoggerLokiIntegration:
         mogger.info("Message with context", category="user_actions", user_id="context_user", action="login")
         
         mogger.clear_context()
-        mogger.close()
 
-    def test_mogger_loki_multiple_logs(self, test_config_path, test_db_path, loki_config_from_env):
+    def test_mogger_loki_multiple_logs(self, test_config_path, loki_config_from_env):
         """Test sending multiple logs to Loki."""
         mogger = Mogger(
             test_config_path,
-            db_path=test_db_path,
             loki_config=loki_config_from_env
         )
         
@@ -120,10 +105,8 @@ class TestMoggerLokiIntegration:
                 event_type="test",
                 description=f"Test event {i}"
             )
-        
-        mogger.close()
 
-    def test_mogger_loki_with_custom_tags(self, test_config_path, test_db_path, load_env_vars):
+    def test_mogger_loki_with_custom_tags(self, test_config_path, load_env_vars):
         """Test Mogger with custom Loki tags."""
         loki_url = os.getenv("LOKI_URL")
         if not loki_url:
@@ -143,9 +126,7 @@ class TestMoggerLokiIntegration:
         
         mogger = Mogger(
             test_config_path,
-            db_path=test_db_path,
             loki_config=custom_config
         )
         
         mogger.info("Message with custom tags", category="user_actions", user_id="custom_user", action="test")
-        mogger.close()

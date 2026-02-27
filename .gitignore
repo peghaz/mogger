@@ -4,13 +4,34 @@ __pycache__/
 build/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
 
 # Virtual environments
-.venv
+.venv/
 
-*.db
+# Environment and secrets
 .env
-*.log
 
+# Logs
+*.log
+pytest.log
+
+# Database (legacy)
+*.db
+
+# CSV log files
+*.csv
+.mogger.logs/
+.mogger.test.logs/
+
+# Test/development files
 mock.py
+
+# IDE
+.vscode/
+
+# pytest
+.pytest_cache/
+
+# uv lock file (optional - remove if you want to track it)
+uv.lock

@@ -3,6 +3,7 @@ Pytest configuration and fixtures for Mogger tests.
 """
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -38,41 +39,33 @@ def test_config_path():
 
 
 @pytest.fixture
-def test_db_path():
-    """Return path to test database file."""
-    return Path(__file__).parent.parent / "mogger_test_logs.db"
-
-
-@pytest.fixture
-def clean_test_db(test_db_path):
-    """Remove test database before tests (but keep it after for inspection)."""
+def clean_test_logs(test_config_path):
+    """Remove test logs directory before tests."""
+    logs_dir = Path(__file__).parent / ".mogger.logs"
+    
     # Remove before test if it exists from previous run
-    if test_db_path.exists():
-        test_db_path.unlink()
+    if logs_dir.exists():
+        shutil.rmtree(logs_dir)
 
     yield
 
-    # Keep the database after tests for inspection
-    # It will be deleted in the next test run
+    # Keep the logs after tests for inspection
+    # They will be deleted in the next test run
 
 
 from mogger import Mogger
 
 
 @pytest.fixture
-def logger(test_config_path, clean_test_db):
+def logger(test_config_path, clean_test_logs):
     """Create a Mogger instance for testing."""
     mogger = Mogger(test_config_path)
     yield mogger
-    if mogger is not None:
-        mogger.close()
 
 
 @pytest.fixture
-def logger_with_terminal(test_config_path, clean_test_db):
+def logger_with_terminal(test_config_path, clean_test_logs):
     """Create a Mogger instance with terminal output enabled."""
     mogger = Mogger(test_config_path)
     mogger.set_terminal(True)
     yield mogger
-    if mogger is not None:
-        mogger.close()

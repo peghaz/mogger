@@ -1,5 +1,5 @@
 """
-Mogger - A custom logging library with SQLite persistence and terminal output.
+Mogger - A custom logging library with CSV persistence and terminal output.
 """
 
 import uuid as uuid_lib
@@ -12,21 +12,22 @@ import yaml
 from pydantic import ValidationError
 from rich.console import Console
 
-from .database import DatabaseManager
-from .models import MoggerConfig
+from .csv_writer import CSVWriter
+from .models import MoggerConfig, FieldValidationError
 from .loki import LokiConfig, LokiLogger
 
 
 class Mogger:
     """
-    Custom logger with SQLite persistence and configurable terminal output.
+    Custom logger with CSV persistence and configurable terminal output.
 
     Features:
     - YAML-driven schema configuration
-    - SQLite database with relational design
+    - CSV file persistence
     - Colored terminal output
     - UUID tracking for all logs
     - Multiple log tables with custom fields
+    - Strict field validation
     """
 
     # Log level constants
@@ -36,7 +37,12 @@ class Mogger:
     ERROR = "ERROR"
     CRITICAL = "CRITICAL"
 
-    def __init__(self, config_path: Optional[Union[str, Path]] = None, db_path: Optional[str] = None, loki_config: Optional[LokiConfig] = None, use_local_db: bool = True):
+    def __init__(
+        self,
+        config_path: Optional[Union[str, Path]] = None,
+        loki_config: Optional[LokiConfig] = None,
+        log_to_csv: bool = True
+    ):
         """
         Initialize Mogger with configuration file.
 
@@ -44,28 +50,28 @@ class Mogger:
             config_path: Path to YAML configuration file. If not provided, will search for
                         'mogger_config.yaml', 'mogger.config.yaml', or '.mogger.yaml' 
                         in the current working directory.
-            db_path: Optional override for database path
             loki_config: Optional LokiConfig for sending logs to Loki server
-            use_local_db: Whether to initialize and use local database (default: True)
+            log_to_csv: Whether to write logs to CSV files (default: True)
         """
         self.__config_path = self.__find_config_file(config_path)
         self.__config: Optional[MoggerConfig] = None
-        self.__db_manager: Optional[DatabaseManager] = None
+        self.__csv_writer: Optional[CSVWriter] = None
         self.__context_data: Dict[str, Any] = {}
         self.__console = Console()  # Rich console for colored output
         self.__loki_logger: Optional[LokiLogger] = None
-        self.__use_local_db = use_local_db
+        self.__log_to_csv = log_to_csv
 
         # Load and validate configuration
         self.__load_config()
+        
+        # Build allowed fields map for validation
+        self.__allowed_fields: Dict[str, set] = {}
+        for table in self.__config.tables:
+            self.__allowed_fields[table.name] = {field.name for field in table.fields}
 
-        # Override db path if provided
-        if db_path:
-            self.__config.database.path = db_path
-
-        # Initialize database manager only if use_local_db is True
-        if self.__use_local_db:
-            self.__db_manager = DatabaseManager(self.__config)
+        # Initialize CSV writer if enabled
+        if self.__log_to_csv:
+            self.__csv_writer = CSVWriter(self.__config)
 
         # Initialize Loki logger if config provided
         if loki_config is not None:
@@ -125,26 +131,45 @@ class Mogger:
         except Exception as e:
             raise RuntimeError(f"Failed to load config: {e}")
 
-    def __print_to_terminal(self, level: str, category: str, log_uuid: str, message: str, **kwargs) -> None:
+    def __validate_fields(self, category: str, kwargs: Dict[str, Any]) -> None:
+        """
+        Validate that all provided fields are defined in the table config.
+        
+        Args:
+            category: Table/category name
+            kwargs: Fields to validate
+            
+        Raises:
+            FieldValidationError: If any field is not defined in config
+        """
+        if category not in self.__allowed_fields:
+            raise FieldValidationError(f"Unknown category: {category}")
+        
+        allowed = self.__allowed_fields[category]
+        provided = set(kwargs.keys())
+        invalid = provided - allowed
+        
+        if invalid:
+            raise FieldValidationError(
+                f"Invalid fields for category '{category}': {', '.join(sorted(invalid))}. "
+                f"Allowed fields are: {', '.join(sorted(allowed))}"
+            )
+
+    def __print_to_terminal(self, level: str, log_uuid: str, message: str, **kwargs) -> None:
         """Print log to terminal with formatting and colors."""
         if not self.__config.terminal.enabled:
             return
 
         timestamp = datetime.now().strftime(self.__config.terminal.timestamp_format)
 
-        # Build message
+        # Build message - use 'table' placeholder for backward compatibility
         formatted_msg = self.__config.terminal.format.format(
             timestamp=timestamp,
-            level=level,
-            table=category,
+            level=level.center(8),
+            table=kwargs.get("category", ""),
             uuid=log_uuid if self.__config.terminal.show_uuid else "",
             message=message
         )
-
-        # Add extra fields if any
-        if kwargs:
-            extra_fields = ", ".join([f"{k}={v}" for k, v in kwargs.items()])
-            formatted_msg += f" | {extra_fields}"
 
         # Get color for level
         color = getattr(self.__config.terminal.colors, level, "white")
@@ -152,14 +177,15 @@ class Mogger:
         # Print with color using rich
         self.__console.print(formatted_msg, style=color)
 
-    def __insert_log(self, level: str, category: str, use_local_db: bool = True, **kwargs) -> str:
+    def __write_log(self, level: str, category: str, message: str, log_to_csv: bool = True, **kwargs) -> str:
         """
-        Insert a log entry into the database.
+        Write a log entry to CSV.
 
         Args:
             level: Log level
             category: Log category/table
-            use_local_db: Whether to insert into local database
+            message: Log message
+            log_to_csv: Whether to write to CSV
             **kwargs: Additional fields
 
         Returns:
@@ -169,20 +195,20 @@ class Mogger:
         log_uuid = str(uuid_lib.uuid4())
         created_at = datetime.now()
 
-        # Use database manager to insert log only if enabled
-        if use_local_db and self.__use_local_db and self.__db_manager is not None:
-            self.__db_manager.insert_log(
-                log_uuid=log_uuid,
+        # Write to CSV if enabled
+        if log_to_csv and self.__log_to_csv and self.__csv_writer is not None:
+            self.__csv_writer.write_log(
+                table_name=category,
+                log_id=log_uuid,
+                timestamp=created_at,
                 level=level,
-                table=category,
-                created_at=created_at,
-                context_data=self.__context_data,
+                message=message,
                 **kwargs
             )
 
         return log_uuid
 
-    def log(self, level: str, message: str, category: str, use_local_db: bool = True, log_to_shell: bool = True, **kwargs) -> str:
+    def log(self, level: str, message: str, category: str, log_to_csv: bool = True, log_to_shell: bool = True, **kwargs) -> str:
         """
         Log a message with custom level.
 
@@ -190,27 +216,33 @@ class Mogger:
             level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
             message: Log message
             category: Target category/table name
-            use_local_db: Whether to log to local database (default: True)
+            log_to_csv: Whether to write to CSV file (default: True)
             log_to_shell: Whether to log to terminal/shell (default: True)
             **kwargs: Additional fields matching table schema
 
         Returns:
             UUID of the log entry
         """
-        # Insert into database (pass message as a field if table has message column)
-        log_uuid = self.__insert_log(level, category, use_local_db=use_local_db, message=message, **kwargs)
+        # Merge context data with kwargs
+        merged_kwargs = {**self.__context_data, **kwargs}
+        
+        # Validate fields if CSV logging is enabled
+        if log_to_csv and self.__log_to_csv:
+            self.__validate_fields(category, merged_kwargs)
+        
+        # Write to CSV
+        log_uuid = self.__write_log(level, category, message, log_to_csv=log_to_csv, **merged_kwargs)
 
         # Print to terminal
         if log_to_shell:
-            self.__print_to_terminal(level, category, log_uuid, message, **kwargs)
+            self.__print_to_terminal(level, log_uuid, message, category=category, **merged_kwargs)
 
         # Send to Loki if configured
         if self.__loki_logger is not None:
             extra_data = {
                 "category": category,
                 "uuid": log_uuid,
-                **self.__context_data,
-                **kwargs
+                **merged_kwargs
             }
 
             log_message = self.__make_total_loki_data(message, extra_data)
@@ -236,25 +268,25 @@ class Mogger:
             **extra_data
         }
 
-    def debug(self, message: str, category: str, use_local_db: bool = True, log_to_shell: bool = True, **kwargs) -> str:
+    def debug(self, message: str, category: str, log_to_csv: bool = True, log_to_shell: bool = True, **kwargs) -> str:
         """Log a DEBUG message."""
-        return self.log(self.DEBUG, message, category, use_local_db=use_local_db, log_to_shell=log_to_shell, **kwargs)
+        return self.log(self.DEBUG, message, category, log_to_csv=log_to_csv, log_to_shell=log_to_shell, **kwargs)
 
-    def info(self, message: str, category: str, use_local_db: bool = True, log_to_shell: bool = True, **kwargs) -> str:
+    def info(self, message: str, category: str, log_to_csv: bool = True, log_to_shell: bool = True, **kwargs) -> str:
         """Log an INFO message."""
-        return self.log(self.INFO, message, category, use_local_db=use_local_db, log_to_shell=log_to_shell, **kwargs)
+        return self.log(self.INFO, message, category, log_to_csv=log_to_csv, log_to_shell=log_to_shell, **kwargs)
 
-    def warning(self, message: str, category: str, use_local_db: bool = True, log_to_shell: bool = True, **kwargs) -> str:
+    def warning(self, message: str, category: str, log_to_csv: bool = True, log_to_shell: bool = True, **kwargs) -> str:
         """Log a WARNING message."""
-        return self.log(self.WARNING, message, category, use_local_db=use_local_db, log_to_shell=log_to_shell, **kwargs)
+        return self.log(self.WARNING, message, category, log_to_csv=log_to_csv, log_to_shell=log_to_shell, **kwargs)
 
-    def error(self, message: str, category: str, use_local_db: bool = True, log_to_shell: bool = True, **kwargs) -> str:
+    def error(self, message: str, category: str, log_to_csv: bool = True, log_to_shell: bool = True, **kwargs) -> str:
         """Log an ERROR message."""
-        return self.log(self.ERROR, message, category, use_local_db=use_local_db, log_to_shell=log_to_shell, **kwargs)
+        return self.log(self.ERROR, message, category, log_to_csv=log_to_csv, log_to_shell=log_to_shell, **kwargs)
 
-    def critical(self, message: str, category: str, use_local_db: bool = True, log_to_shell: bool = True, **kwargs) -> str:
+    def critical(self, message: str, category: str, log_to_csv: bool = True, log_to_shell: bool = True, **kwargs) -> str:
         """Log a CRITICAL message."""
-        return self.log(self.CRITICAL, message, category, use_local_db=use_local_db, log_to_shell=log_to_shell, **kwargs)
+        return self.log(self.CRITICAL, message, category, log_to_csv=log_to_csv, log_to_shell=log_to_shell, **kwargs)
 
     def set_terminal(self, enabled: bool) -> None:
         """Enable or disable terminal output."""
@@ -268,121 +300,9 @@ class Mogger:
         """Clear all context data."""
         self.__context_data.clear()
 
-    def query(self, category: str, limit: Optional[int] = None, **filters) -> List[Dict[str, Any]]:
-        """
-        Query logs from a specific category.
-
-        Args:
-            category: Category name to query
-            limit: Maximum number of results
-            **filters: Field filters (e.g., log_level="ERROR")
-
-        Returns:
-            List of log entries as dictionaries
-        """
-        if not self.__use_local_db or self.__db_manager is None:
-            raise RuntimeError("Local database is not enabled. Initialize Mogger with use_local_db=True")
-        return self.__db_manager.query(table=category, limit=limit, **filters)
-
-    def get_latest_logs(self, category: str, limit: int = 10, **filters) -> List[Dict[str, Any]]:
-        """
-        Get the most recent logs from a specific category.
-
-        Args:
-            category: Category name to query (can be 'logs_master' or any configured table)
-            limit: Maximum number of results (default: 10)
-            **filters: Field filters (e.g., log_level="ERROR")
-
-        Returns:
-            List of log entries as dictionaries, ordered by most recent first
-
-        Example:
-            >>> logger.get_latest_logs("user_actions", limit=5)
-            >>> logger.get_latest_logs("logs_master", limit=10, log_level="ERROR")
-        """
-        if not self.__use_local_db or self.__db_manager is None:
-            raise RuntimeError("Local database is not enabled. Initialize Mogger with use_local_db=True")
-        return self.__db_manager.get_latest_logs(table=category, limit=limit, **filters)
-
-    def get_oldest_logs(self, category: str, limit: int = 10, **filters) -> List[Dict[str, Any]]:
-        """
-        Get the oldest logs from a specific category.
-
-        Args:
-            category: Category name to query (can be 'logs_master' or any configured table)
-            limit: Maximum number of results (default: 10)
-            **filters: Field filters (e.g., log_level="ERROR")
-
-        Returns:
-            List of log entries as dictionaries, ordered by oldest first
-
-        Example:
-            >>> logger.get_oldest_logs("errors", limit=5)
-            >>> logger.get_oldest_logs("logs_master", limit=10, table_name="user_actions")
-        """
-        if not self.__use_local_db or self.__db_manager is None:
-            raise RuntimeError("Local database is not enabled. Initialize Mogger with use_local_db=True")
-        return self.__db_manager.get_oldest_logs(table=category, limit=limit, **filters)
-
-    def get_logs_between(self, category: str, start_time: datetime,
-                         end_time: datetime, limit: Optional[int] = None,
-                         **filters) -> List[Dict[str, Any]]:
-        """
-        Get logs between two timestamps.
-
-        Args:
-            category: Category name to query (can be 'logs_master' or any configured table)
-            start_time: Start timestamp (inclusive)
-            end_time: End timestamp (inclusive)
-            limit: Maximum number of results (optional)
-            **filters: Field filters (e.g., log_level="ERROR")
-
-        Returns:
-            List of log entries as dictionaries, ordered by most recent first
-
-        Example:
-            >>> from datetime import datetime, timedelta
-            >>> start = datetime.now() - timedelta(hours=1)
-            >>> end = datetime.now()
-            >>> logger.get_logs_between("user_actions", start, end)
-            >>> logger.get_logs_between("logs_master", start, end, limit=50, log_level="WARNING")
-        """
-        if not self.__use_local_db or self.__db_manager is None:
-            raise RuntimeError("Local database is not enabled. Initialize Mogger with use_local_db=True")
-        return self.__db_manager.get_logs_between(
-            table=category, start_time=start_time, end_time=end_time,
-            limit=limit, **filters
-        )
-
-    def search_logs(self, category: str, keyword: str, fields: Optional[List[str]] = None,
-                    limit: Optional[int] = None, **filters) -> List[Dict[str, Any]]:
-        """
-        Search for logs containing a keyword in specified fields.
-
-        Args:
-            category: Category name to query (cannot be 'logs_master')
-            keyword: Keyword to search for (case-insensitive)
-            fields: List of field names to search in. If None, searches all string/text fields
-            limit: Maximum number of results (optional)
-            **filters: Additional field filters (e.g., log_level="ERROR")
-
-        Returns:
-            List of log entries as dictionaries where at least one field contains the keyword
-
-        Example:
-            >>> logger.search_logs("errors", "database", fields=["error_message"])
-            >>> logger.search_logs("user_actions", "login")
-            >>> logger.search_logs("system_events", "failure", limit=20)
-        """
-        if not self.__use_local_db or self.__db_manager is None:
-            raise RuntimeError("Local database is not enabled. Initialize Mogger with use_local_db=True")
-        return self.__db_manager.search_logs(
-            table=category, keyword=keyword, fields=fields, limit=limit, **filters
-        )
-
     def get_tables(self) -> List[str]:
         """Get list of all available log tables."""
-        return self.__db_manager.get_tables()
+        return [table.name for table in self.__config.tables]
 
     def generate_loki_config(self, destination: Optional[Union[str, Path]] = None) -> Path:
         """
@@ -461,8 +381,3 @@ class Mogger:
             if dest_path.exists():
                 shutil.rmtree(dest_path)
             raise RuntimeError(f"Failed to generate Loki configuration: {e}")
-
-    def close(self) -> None:
-        """Close database connections."""
-        if self.__db_manager:
-            self.__db_manager.close()

@@ -12,16 +12,14 @@ class TestContextManagement:
     
     def test_set_context(self, logger):
         """Test setting context data."""
+        # Context fields are not defined in schema, so use log_to_csv=False
         logger.set_context(request_id="req_123", session_id="sess_456")
         
-        # Log should include context data
+        # Log should include context data (sent to Loki if configured, not to CSV)
         log_uuid = logger.info("Action with context", category="user_actions",
-                              user_id="u1", action="test")
+                              user_id="u1", action="test", log_to_csv=False)
         
-        # Query and verify (context data should be in the log)
-        results = logger.query(category="user_actions")
-        assert len(results) == 1
-        # Note: context_data is merged into kwargs, so it depends on table schema
+        assert log_uuid is not None
     
     def test_clear_context(self, logger):
         """Test clearing context data."""
@@ -37,20 +35,24 @@ class TestContextManagement:
         """Test that context persists across multiple log calls."""
         logger.set_context(session_id="sess_789")
         
-        uuid1 = logger.info("Log 1", category="user_actions", user_id="u1", action="a1")
-        uuid2 = logger.info("Log 2", category="user_actions", user_id="u2", action="a2")
-        uuid3 = logger.info("Log 3", category="user_actions", user_id="u3", action="a3")
+        # Context fields not in schema, so use log_to_csv=False
+        uuid1 = logger.info("Log 1", category="user_actions", user_id="u1", action="a1", log_to_csv=False)
+        uuid2 = logger.info("Log 2", category="user_actions", user_id="u2", action="a2", log_to_csv=False)
+        uuid3 = logger.info("Log 3", category="user_actions", user_id="u3", action="a3", log_to_csv=False)
         
         assert all([uuid1, uuid2, uuid3])
+        logger.clear_context()
     
     def test_update_context(self, logger):
         """Test updating existing context."""
         logger.set_context(key1="value1", key2="value2")
         logger.set_context(key2="updated", key3="value3")  # Update key2, add key3
         
+        # Context fields not in schema, so use log_to_csv=False
         log_uuid = logger.info("Updated context", category="user_actions",
-                              user_id="u1", action="test")
+                              user_id="u1", action="test", log_to_csv=False)
         assert log_uuid is not None
+        logger.clear_context()
 
 
 class TestLoggerState:
@@ -69,17 +71,19 @@ class TestLoggerState:
         
         assert all([log1, log2])
     
-    def test_logger_close(self, logger):
-        """Test closing logger."""
-        logger.info("Before close", category="system_events",
-                   event_type="test", description="Test")
-        logger.close()
+    def test_logger_multiple_logs(self, logger):
+        """Test logging multiple messages."""
+        uuid1 = logger.info("Log 1", category="system_events",
+                   event_type="test", description="Test 1")
+        uuid2 = logger.info("Log 2", category="system_events",
+                   event_type="test", description="Test 2")
         
-        # After close, attempting operations should fail
-        # (depends on implementation - might just work with a new connection)
+        assert uuid1 is not None
+        assert uuid2 is not None
+        assert uuid1 != uuid2
     
-    def test_multiple_logger_instances(self, test_config_path, clean_test_db):
-        """Test multiple logger instances on same database."""
+    def test_multiple_logger_instances(self, test_config_path, clean_test_logs):
+        """Test multiple logger instances."""
         logger1 = Mogger(test_config_path)
         logger2 = Mogger(test_config_path)
         
@@ -88,18 +92,8 @@ class TestLoggerState:
         uuid2 = logger2.info("From logger2", category="system_events",
                            event_type="l2", description="Logger 2")
         
-        # Both should work
+        # Both should work and produce unique UUIDs
         assert uuid1 != uuid2
-        
-        # Query from both
-        results1 = logger1.query(category="system_events")
-        results2 = logger2.query(category="system_events")
-        
-        assert len(results1) == 2
-        assert len(results2) == 2
-        
-        logger1.close()
-        logger2.close()
 
 
 class TestEdgeCases:
@@ -110,10 +104,6 @@ class TestEdgeCases:
         log_uuid = logger.info("Empty strings", category="user_actions",
                               user_id="", action="")
         assert log_uuid is not None
-        
-        results = logger.query(category="user_actions")
-        assert results[0]["user_id"] == ""
-        assert results[0]["action"] == ""
     
     def test_very_long_text(self, logger):
         """Test logging with very long text."""
@@ -124,9 +114,6 @@ class TestEdgeCases:
                                error_message=long_text,
                                severity="high")
         assert log_uuid is not None
-        
-        results = logger.query(category="errors")
-        assert len(results[0]["error_message"]) == 10000
     
     def test_special_characters(self, logger):
         """Test logging with special characters."""
@@ -136,9 +123,6 @@ class TestEdgeCases:
                               event_type="special",
                               description=special_text)
         assert log_uuid is not None
-        
-        results = logger.query(category="system_events")
-        assert special_text in results[0]["description"]
     
     def test_unicode_characters(self, logger):
         """Test logging with Unicode characters."""
@@ -148,9 +132,6 @@ class TestEdgeCases:
                               event_type="unicode",
                               description=unicode_text)
         assert log_uuid is not None
-        
-        results = logger.query(category="system_events")
-        assert unicode_text in results[0]["description"]
     
     def test_null_vs_missing_nullable_field(self, logger):
         """Test difference between None and omitted nullable fields."""
@@ -171,9 +152,6 @@ class TestEdgeCases:
                                error_message="Test negative",
                                severity="low")
         assert log_uuid is not None
-        
-        results = logger.query(category="errors")
-        assert results[0]["error_code"] == -1
     
     def test_boolean_like_strings(self, logger):
         """Test logging strings that look like booleans."""
@@ -219,38 +197,27 @@ class TestConcurrentAccess:
             uuids.append(uuid)
         
         assert len(set(uuids)) == 100  # All unique
-        
-        results = logger.query(category="system_events")
-        assert len(results) == 100
     
     def test_alternating_tables(self, logger):
         """Test rapidly alternating between different tables."""
         tables = ["user_actions", "errors", "system_events", "api_requests"]
         
+        uuids = []
         for i in range(40):  # 10 per table
             table = tables[i % 4]
             
             if table == "user_actions":
-                logger.info(f"Log {i}", category=table, user_id=f"u{i}", action="test")
+                uuid = logger.info(f"Log {i}", category=table, user_id=f"u{i}", action="test")
             elif table == "errors":
-                logger.error(f"Log {i}", category=table, error_code=i,
+                uuid = logger.error(f"Log {i}", category=table, error_code=i,
                            error_message=f"Error {i}", severity="low")
             elif table == "system_events":
-                logger.info(f"Log {i}", category=table, event_type="test",
+                uuid = logger.info(f"Log {i}", category=table, event_type="test",
                           description=f"Event {i}")
             elif table == "api_requests":
-                logger.info(f"Log {i}", category=table, endpoint="/api",
+                uuid = logger.info(f"Log {i}", category=table, endpoint="/api",
                           method="GET", status_code=200, response_time_ms=float(i))
+            uuids.append(uuid)
         
-        # Verify all tables have 10 logs
-        for table in tables:
-            if table == "user_actions":
-                results = logger.query(category=table)
-            elif table == "errors":
-                results = logger.query(category=table)
-            elif table == "system_events":
-                results = logger.query(category=table)
-            elif table == "api_requests":
-                results = logger.query(category=table)
-            
-            assert len(results) == 10
+        # Verify all UUIDs are unique
+        assert len(set(uuids)) == 40

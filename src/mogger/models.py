@@ -1,6 +1,15 @@
 # Pydantic models for config validation
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, field_validator
 from typing import Any, Dict, List, Optional, Union
+
+
+# Allowed field types for strict validation
+ALLOWED_FIELD_TYPES = {"str", "int", "float", "bool", "json", "text"}
+
+
+class FieldValidationError(Exception):
+    """Raised when a field validation fails."""
+    pass
 
 
 class FieldConfig(BaseModel):
@@ -18,6 +27,16 @@ class FieldConfig(BaseModel):
     indexed: bool = False
     nullable: bool = False
 
+    @field_validator('type')
+    @classmethod
+    def validate_type(cls, v: str) -> str:
+        """Validate that field type is one of the allowed types."""
+        if v not in ALLOWED_FIELD_TYPES:
+            raise ValueError(
+                f"Invalid field type '{v}'. Allowed types are: {', '.join(sorted(ALLOWED_FIELD_TYPES))}"
+            )
+        return v
+
 
 class TableConfig(BaseModel):
     """
@@ -31,9 +50,9 @@ class TableConfig(BaseModel):
     fields: List[FieldConfig]
 
 
-class DatabaseConfig(BaseModel):
-    path: str
-    wal_mode: bool = True
+class DirectoryConfig(BaseModel):
+    """Configuration for the logs directory."""
+    path: str = ".mogger.logs"
 
 
 class TerminalColorsConfig(BaseModel):
@@ -60,13 +79,13 @@ class TerminalColorsConfig(BaseModel):
 
 class TerminalConfig(BaseModel):
     enabled: bool = True
-    format: str = "{timestamp} [{level}] [{table}] {message}"
+    format: str = "{timestamp} [{level}] {message}"
     timestamp_format: str = "%Y-%m-%d %H:%M:%S"
     colors: TerminalColorsConfig = Field(default_factory=TerminalColorsConfig)
     show_uuid: bool = False
 
 
 class MoggerConfig(BaseModel):
-    database: DatabaseConfig
+    directory: DirectoryConfig = Field(default_factory=DirectoryConfig)
     tables: List[TableConfig]
     terminal: TerminalConfig = Field(default_factory=TerminalConfig)

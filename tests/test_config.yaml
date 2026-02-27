@@ -1,20 +1,19 @@
 # Test Configuration for Mogger
-# Used for pytest testing with isolated test database
+# Used for pytest testing
 
-database:
-  path: "./mogger_test_logs.db"
-  wal_mode: true
+directory:
+  path: "./.mogger.logs"
 
 tables:
   - name: "user_actions"
     fields:
       - name: "user_id"
-        type: "string"
+        type: "str"
         indexed: true
       - name: "action"
-        type: "string"
+        type: "str"
       - name: "ip_address"
-        type: "string"
+        type: "str"
         nullable: true
       - name: "metadata"
         type: "json"
@@ -23,19 +22,19 @@ tables:
   - name: "errors"
     fields:
       - name: "error_code"
-        type: "integer"
+        type: "int"
       - name: "error_message"
         type: "text"
       - name: "stack_trace"
         type: "text"
         nullable: true
       - name: "severity"
-        type: "string"
+        type: "str"
   
   - name: "system_events"
     fields:
       - name: "event_type"
-        type: "string"
+        type: "str"
         indexed: true
       - name: "description"
         type: "text"
@@ -46,12 +45,12 @@ tables:
   - name: "api_requests"
     fields:
       - name: "endpoint"
-        type: "string"
+        type: "str"
         indexed: true
       - name: "method"
-        type: "string"
+        type: "str"
       - name: "status_code"
-        type: "integer"
+        type: "int"
       - name: "response_time_ms"
         type: "float"
       - name: "request_body"
@@ -63,7 +62,7 @@ tables:
 
 terminal:
   enabled: false  # Disable for tests to avoid cluttering output
-  format: "{timestamp} [{level}] [{table}] {message}"
+  format: "{timestamp} [{level}] {message}"
   timestamp_format: "%Y-%m-%d %H:%M:%S"
   colors:
     DEBUG: "cyan"

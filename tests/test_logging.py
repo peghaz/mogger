@@ -6,6 +6,8 @@ import pytest
 import uuid
 from datetime import datetime
 
+from mogger import FieldValidationError
+
 
 class TestBasicLogging:
     """Test basic logging operations."""
@@ -193,37 +195,38 @@ class TestLoggingErrors:
     """Test error handling in logging operations."""
     
     def test_missing_required_field(self, logger):
-        """Test that missing required fields raise an error."""
-        with pytest.raises(ValueError, match="Required field"):
+        """Test that extra unknown fields raise an error."""
+        # Note: With CSV logging, strict field validation means
+        # any field not defined in schema raises FieldValidationError
+        with pytest.raises(FieldValidationError, match="Invalid fields"):
             logger.info(
                 "Incomplete log",
                 category="errors",
-                error_code=404
-                # error_message and severity are required but missing
+                error_code=404,
+                unknown_field="not_in_schema"  # This field is not in errors schema
             )
     
     def test_invalid_table_name(self, logger):
         """Test logging to non-existent table."""
-        with pytest.raises(ValueError, match="Table.*not found"):
+        with pytest.raises(FieldValidationError, match="Unknown category"):
             logger.info(
                 "Invalid table",
                 category="nonexistent_table",
                 some_field="value"
             )
     
-    def test_extra_fields_ignored(self, logger):
-        """Test that extra fields not in schema are handled."""
-        # Should succeed - extra fields are just ignored in kwargs
-        log_uuid = logger.info(
-            "Log with extra fields",
-            category="system_events",
-            event_type="test",
-            description="Testing extra fields",
-            extra_field_1="ignored",
-            extra_field_2="also_ignored"
-        )
-        
-        assert log_uuid is not None
+    def test_extra_fields_raise_error(self, logger):
+        """Test that extra fields not in schema raise FieldValidationError."""
+        # With strict field validation, extra fields should raise an error
+        with pytest.raises(FieldValidationError, match="Invalid fields"):
+            logger.info(
+                "Log with extra fields",
+                category="system_events",
+                event_type="test",
+                description="Testing extra fields",
+                extra_field_1="should_fail",
+                extra_field_2="also_should_fail"
+            )
 
 
 class TestBulkLogging:

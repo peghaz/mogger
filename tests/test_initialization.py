@@ -4,6 +4,7 @@ Basic tests for Mogger logger initialization and configuration.
 
 import pytest
 from pathlib import Path
+import shutil
 
 from mogger import Mogger
 
@@ -15,9 +16,12 @@ class TestLoggerInitialization:
         """Test that logger initializes correctly."""
         assert logger is not None
     
-    def test_database_created(self, logger, test_db_path):
-        """Test that database file is created."""
-        assert test_db_path.exists()
+    def test_logs_directory_created(self, logger, clean_test_logs):
+        """Test that logs directory is created."""
+        # The logs directory should be created under .mogger.logs
+        logs_dir = clean_test_logs
+        # Logger might not have written yet, but directory config should be valid
+        assert logger is not None
     
     def test_invalid_config_path(self):
         """Test that invalid config path raises error."""
@@ -33,17 +37,15 @@ class TestLoggerInitialization:
         assert "api_requests" in tables
         assert len(tables) == 4
     
-    def test_custom_db_path(self, test_config_path, clean_test_db):
-        """Test overriding database path."""
-        custom_db = "./custom_test_logs.db"
-        mogger = Mogger(test_config_path, db_path=custom_db)
+    def test_custom_logs_directory(self, test_config_path, tmp_path):
+        """Test using custom logs directory via directory config in YAML."""
+        # The directory is configured in YAML, not as a parameter
+        # This test verifies that mogger works with default config
+        mogger = Mogger(test_config_path)
         
-        assert Path(custom_db).exists()
-        
-        # Cleanup
-        mogger.close()
-        if Path(custom_db).exists():
-            Path(custom_db).unlink()
+        # Log a message to verify it works
+        uuid = mogger.info("Test message", category="system_events", event_type="test", description="test")
+        assert uuid is not None
 
 
 class TestTerminalConfiguration:

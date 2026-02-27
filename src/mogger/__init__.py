@@ -1,6 +1,7 @@
 from .core import Mogger
 from .loki import LokiConfig, LokiLogger
+from .models import FieldValidationError
 
-__version__ = '0.2.9'
+__version__ = '0.3.0'
 
-__all__ = ["Mogger", "LokiConfig", "LokiLogger"]
+__all__ = ["Mogger", "LokiConfig", "LokiLogger", "FieldValidationError"]

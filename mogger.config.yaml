@@ -1,13 +1,10 @@
 # Mogger Configuration Template
-# This file defines the structure of your logging database and terminal output settings
+# This file defines the structure of your logging and terminal output settings
 # ! You can use this example to create your own 'mogger.config.yaml' file
 
-database:
-  # Path to the SQLite database file (relative to project root or absolute path)
-  path: "./mogger_logs.db"
-  
-  # Enable Write-Ahead Logging mode for better concurrency
-  wal_mode: true
+directory:
+  # Path to the directory where CSV log files will be stored
+  path: "./.mogger.logs"
 
 # Define custom log tables with their fields
 tables:
@@ -15,12 +12,12 @@ tables:
   - name: "user_actions"
     fields:
       - name: "user_id"
-        type: "string"
+        type: "str"
         indexed: true
       - name: "action"
-        type: "string"
+        type: "str"
       - name: "ip_address"
-        type: "string"
+        type: "str"
         nullable: true
       - name: "metadata"
         type: "json"
@@ -30,20 +27,20 @@ tables:
   - name: "errors"
     fields:
       - name: "error_code"
-        type: "integer"
+        type: "int"
       - name: "error_message"
         type: "text"
       - name: "stack_trace"
         type: "text"
         nullable: true
       - name: "severity"
-        type: "string"
+        type: "str"
   
   # Example: System events
   - name: "system_events"
     fields:
       - name: "event_type"
-        type: "string"
+        type: "str"
         indexed: true
       - name: "description"
         type: "text"
@@ -57,7 +54,7 @@ terminal:
   enabled: true
   
   # Output format (available placeholders: {timestamp}, {level}, {table}, {uuid}, {message})
-  format: "{timestamp} [{level}] [{table}] {message}"
+  format: "{timestamp} [{level}] {message}"
   
   # Timestamp format (Python strftime format)
   timestamp_format: "%Y-%m-%d %H:%M:%S"
@@ -74,10 +71,9 @@ terminal:
   show_uuid: false
 
 # Supported field types:
-# - string: Variable-length string
+# - str: Variable-length string
 # - text: Long text
-# - integer: Integer number
+# - int: Integer number
 # - float: Floating point number
-# - boolean: True/False
+# - bool: True/False
 # - json: JSON data (stored as text, serialized/deserialized automatically)
-# - datetime: Date and time
