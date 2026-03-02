@@ -1,18 +1,19 @@
 # Mogger
 
-A custom logging library with SQLite persistence, colored terminal output, and Loki integration.
+A custom logging library with CSV persistence, colored terminal output, and Loki integration.
 
 ## Features
 
-- **YAML-driven schema configuration** - Define your log tables and fields in a YAML file
-- **SQLite database with relational design** - All logs stored in a persistent database
+- **YAML-driven schema configuration** - Define your log tables and fields in a simple YAML file
+- **CSV file persistence** - Logs stored in human-readable CSV files (one per table)
+- **Strict field validation** - Only fields defined in your schema are allowed
 - **Colored terminal output** - Beautiful colored logs using Rich library
 - **Loki integration** - Send logs to Grafana Loki for centralized logging
-- **Flexible logging control** - Enable/disable database and terminal output per log
+- **Flexible logging control** - Enable/disable CSV and terminal output per log
 - **UUID tracking** - Every log entry has a unique identifier
 - **Multiple log tables** - Create custom tables for different types of logs
 - **Context management** - Add context data to all logs in a scope
-- **Query API** - Retrieve and analyze logs from the database
+- **Thread-safe** - Safe for concurrent logging from multiple threads
 - **Automatic config detection** - No need to specify config path if file is in project root
 
 ## Installation
@@ -25,21 +26,29 @@ pip install mogger
 
 ### 1. Create a configuration file
 
-Create `mogger_config.yaml` in your project root:
+Create `mogger.config.yaml` in your project root:
 
 ```yaml
-database:
-  path: "./logs.db"
-  wal_mode: true
+directory:
+  path: "./.mogger.logs"
 
 tables:
   - name: "user_actions"
     fields:
       - name: "user_id"
-        type: "string"
+        type: "str"
         indexed: true
       - name: "action"
-        type: "string"
+        type: "str"
+
+  - name: "errors"
+    fields:
+      - name: "error_code"
+        type: "int"
+      - name: "error_message"
+        type: "text"
+      - name: "severity"
+        type: "str"
 
 terminal:
   enabled: true
@@ -54,7 +63,7 @@ terminal:
 ```python
 from mogger import Mogger
 
-# Automatic config detection - looks for mogger_config.yaml in current directory
+# Automatic config detection - looks for mogger.config.yaml in current directory
 logger = Mogger()
 
 # Or specify config explicitly
@@ -62,14 +71,11 @@ logger = Mogger()
 
 # Log messages
 logger.info("User logged in", category="user_actions", user_id="123", action="login")
-logger.error("Something failed", category="errors", error_code=500, error_message="Server error")
+logger.error("Something failed", category="errors", error_code=500, error_message="Server error", severity="high")
 
-# Query logs
-recent_errors = logger.query(category="errors", limit=10)
-user_logs = logger.query(category="user_actions", user_id="123")
-
-# Close when done
-logger.close()
+# Logs are written to:
+# .mogger.logs/user_actions.logs.csv
+# .mogger.logs/errors.logs.csv
 ```
 
 ## Initialization Options
@@ -79,14 +85,11 @@ logger.close()
 ```python
 from mogger import Mogger
 
-# Default: local database and terminal output enabled
-logger = Mogger("mogger_config.yaml")
+# Default: CSV logging and terminal output enabled
+logger = Mogger("mogger.config.yaml")
 
-# Disable local database (Loki-only or terminal-only logging)
-logger = Mogger("mogger_config.yaml", use_local_db=False)
-
-# Custom database path
-logger = Mogger("mogger_config.yaml", db_path="./custom_logs.db")
+# Disable CSV logging (Loki-only or terminal-only logging)
+logger = Mogger("mogger.config.yaml", log_to_csv=False)
 ```
 
 ### Loki Integration
@@ -103,10 +106,10 @@ loki_config = LokiConfig(
 )
 
 # Initialize with Loki support
-logger = Mogger("mogger_config.yaml", loki_config=loki_config)
+logger = Mogger("mogger.config.yaml", loki_config=loki_config)
 
-# Loki-only logging (no local database)
-logger = Mogger("mogger_config.yaml", loki_config=loki_config, use_local_db=False)
+# Loki-only logging (no local CSV files)
+logger = Mogger("mogger.config.yaml", loki_config=loki_config, log_to_csv=False)
 ```
 
 ### Generate Loki Deployment Configuration
@@ -116,7 +119,7 @@ Mogger can generate a complete Docker Compose setup for Loki + Grafana + Alloy:
 ```python
 from mogger import Mogger
 
-logger = Mogger("mogger_config.yaml")
+logger = Mogger("mogger.config.yaml")
 
 # Generate Loki config in current directory (creates 'loki-config' folder)
 config_path = logger.generate_loki_config()
@@ -141,18 +144,18 @@ The generated configuration includes:
 
 All logging methods (`debug`, `info`, `warning`, `error`, `critical`) support these parameters:
 
-### `use_local_db` (default: `True`)
+### `log_to_csv` (default: `True`)
 
-Control whether logs are written to the local SQLite database.
+Control whether logs are written to CSV files.
 
 ```python
-# Skip database for this specific log
+# Skip CSV for this specific log (useful for context fields not in schema)
 logger.info("Temporary message", category="user_actions", 
-            user_id="123", action="click", use_local_db=False)
+            user_id="123", action="click", log_to_csv=False)
 
-# Log only to Loki and terminal, not database
+# Log only to Loki and terminal, not CSV
 logger.error("Remote error", category="errors", 
-             error_code=500, use_local_db=False)
+             error_code=500, error_message="Error", severity="high", log_to_csv=False)
 ```
 
 ### `log_to_shell` (default: `True`)
@@ -160,29 +163,29 @@ logger.error("Remote error", category="errors",
 Control whether logs are printed to the terminal.
 
 ```python
-# Silent logging (database and Loki only)
+# Silent logging (CSV and Loki only)
 logger.info("Background task", category="system_events", 
-            event_type="cron", log_to_shell=False)
+            event_type="cron", description="Running backup", log_to_shell=False)
 
 # Quiet error logging
 logger.error("Internal error", category="errors", 
-             error_code=500, log_to_shell=False)
+             error_code=500, error_message="Error", severity="high", log_to_shell=False)
 ```
 
 ### Combining Parameters
 
 ```python
-# Terminal only (no database, no Loki)
+# Terminal only (no CSV, no Loki)
 logger.info("Debug info", category="user_actions", 
-            user_id="123", use_local_db=False, log_to_shell=True)
+            user_id="123", action="test", log_to_csv=False, log_to_shell=True)
 
 # Completely silent (Loki only if configured)
-logger.info("Silent audit", category="audit", 
-            action="access", use_local_db=False, log_to_shell=False)
+logger.info("Silent audit", category="user_actions", 
+            user_id="123", action="access", log_to_csv=False, log_to_shell=False)
 
-# Database only (silent logging)
+# CSV only (silent logging)
 logger.info("Background event", category="system_events", 
-            event_type="backup", log_to_shell=False)
+            event_type="backup", description="Backup started", log_to_shell=False)
 ```
 
 ## Configuration
@@ -199,28 +202,147 @@ Mogger automatically searches for these config files in your project root:
 
 ### Supported Field Types
 
-- `string` - Variable-length string
-- `text` - Long text
-- `integer` - Integer number
-- `float` - Floating point number
-- `boolean` - True/False
-- `json` - JSON data (automatically serialized/deserialized)
-- `datetime` - Date and time
+| Type | Description |
+|------|-------------|
+| `str` | Variable-length string |
+| `text` | Long text content |
+| `int` | Integer number |
+| `float` | Floating point number |
+| `bool` | Boolean (True/False) |
+| `json` | JSON data (automatically serialized) |
 
 ### Terminal Colors
 
 Available colors: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`
 
+### Complete Configuration Example
+
+```yaml
+# Directory where CSV log files will be stored
+directory:
+  path: "./.mogger.logs"
+
+# Define custom log tables with their fields
+tables:
+  - name: "user_actions"
+    fields:
+      - name: "user_id"
+        type: "str"
+        indexed: true
+      - name: "action"
+        type: "str"
+      - name: "ip_address"
+        type: "str"
+        nullable: true
+      - name: "metadata"
+        type: "json"
+        nullable: true
+
+  - name: "errors"
+    fields:
+      - name: "error_code"
+        type: "int"
+      - name: "error_message"
+        type: "text"
+      - name: "stack_trace"
+        type: "text"
+        nullable: true
+      - name: "severity"
+        type: "str"
+
+  - name: "system_events"
+    fields:
+      - name: "event_type"
+        type: "str"
+        indexed: true
+      - name: "description"
+        type: "text"
+      - name: "duration_ms"
+        type: "float"
+        nullable: true
+
+  - name: "api_requests"
+    fields:
+      - name: "endpoint"
+        type: "str"
+      - name: "method"
+        type: "str"
+      - name: "status_code"
+        type: "int"
+      - name: "response_time_ms"
+        type: "float"
+      - name: "request_body"
+        type: "json"
+        nullable: true
+      - name: "response_body"
+        type: "json"
+        nullable: true
+
+# Terminal output settings
+terminal:
+  enabled: true
+  format: "{timestamp} [{level}] {message}"
+  timestamp_format: "%Y-%m-%d %H:%M:%S"
+  show_uuid: false
+  colors:
+    DEBUG: "cyan"
+    INFO: "green"
+    WARNING: "yellow"
+    ERROR: "red"
+    CRITICAL: "magenta"
+```
+
+## Strict Field Validation
+
+Mogger enforces strict field validation. Only fields defined in your YAML schema are allowed:
+
+```python
+from mogger import Mogger, FieldValidationError
+
+logger = Mogger("mogger.config.yaml")
+
+# This works - all fields are defined in schema
+logger.info("Login", category="user_actions", user_id="123", action="login")
+
+# This raises FieldValidationError - 'unknown_field' is not in schema
+try:
+    logger.info("Login", category="user_actions", user_id="123", action="login", unknown_field="value")
+except FieldValidationError as e:
+    print(e)  # Invalid fields for category 'user_actions': unknown_field. Allowed fields are: action, ip_address, metadata, user_id
+
+# This raises FieldValidationError - category doesn't exist
+try:
+    logger.info("Message", category="nonexistent_table", some_field="value")
+except FieldValidationError as e:
+    print(e)  # Unknown category: nonexistent_table
+```
+
+### Bypassing Validation with `log_to_csv=False`
+
+When you need to log fields not in your schema (e.g., context data), use `log_to_csv=False`:
+
+```python
+# Context fields are not in schema, so disable CSV logging for this call
+logger.set_context(request_id="req-123", session_id="sess-456")
+logger.info("Action with context", category="user_actions", 
+            user_id="123", action="view", log_to_csv=False)
+logger.clear_context()
+```
+
 ## Advanced Usage
 
 ### Context Management
+
+Add context data that applies to all subsequent logs:
 
 ```python
 # Set context that applies to all subsequent logs
 logger.set_context(request_id="req_123", user_id="user_456")
 
-logger.info("Action 1", category="user_actions", action="click")
-logger.info("Action 2", category="user_actions", action="scroll")
+# These logs will include context data (sent to Loki, not CSV)
+# Use log_to_csv=False since context fields aren't in schema
+logger.info("Action 1", category="user_actions", action="click", log_to_csv=False)
+logger.info("Action 2", category="user_actions", action="scroll", log_to_csv=False)
 
 # Clear context
 logger.clear_context()
@@ -229,109 +351,46 @@ logger.clear_context()
 ### Disable Terminal Output Globally
 
 ```python
-logger.set_terminal(False)  # Logs only to database (and Loki if configured)
+logger.set_terminal(False)  # Logs only to CSV (and Loki if configured)
+logger.set_terminal(True)   # Re-enable terminal output
 ```
 
-### Query Logs
+### Get Available Tables
 
 ```python
-# Get all logs from a table
-all_logs = logger.query(category="user_actions")
-
-# Filter logs
-errors = logger.query(category="logs_master", log_level="ERROR")
-user_errors = logger.query(category="errors", user_id="123")
-
-# Limit results
-recent = logger.query(category="user_actions", limit=50)
+tables = logger.get_tables()
+print(tables)  # ['user_actions', 'errors', 'system_events', 'api_requests']
 ```
 
-### Advanced Search
+## CSV File Structure
 
-#### Query Latest Logs
+Logs are stored in CSV files under the configured directory (default: `.mogger.logs/`):
 
-```python
-# Get the 10 most recent logs
-latest = logger.get_latest_logs("logs_master", limit=10)
-
-# Get latest logs with filters
-latest_errors = logger.get_latest_logs("logs_master", limit=5, log_level="ERROR")
-latest_user_actions = logger.get_latest_logs("user_actions", limit=20, user_id="123")
+```
+.mogger.logs/
+├── user_actions.logs.csv
+├── errors.logs.csv
+├── system_events.logs.csv
+└── api_requests.logs.csv
 ```
 
-#### Query Oldest Logs
+Each CSV file contains:
+- `uuid` - Unique identifier for the log entry
+- `created_at` - Timestamp when the log was created
+- `log_level` - DEBUG, INFO, WARNING, ERROR, or CRITICAL
+- `message` - The log message
+- All custom fields defined in your schema
 
-```python
-# Get the 10 oldest logs
-oldest = logger.get_oldest_logs("logs_master", limit=10)
-
-# Get oldest logs with filters
-first_errors = logger.get_oldest_logs("errors", limit=5, severity="critical")
+Example `user_actions.logs.csv`:
+```csv
+uuid,created_at,log_level,message,user_id,action,ip_address,metadata
+a1b2c3d4-...,2026-02-27 10:30:15,INFO,User logged in,user_123,login,192.168.1.1,
+e5f6g7h8-...,2026-02-27 10:30:20,INFO,User clicked button,user_123,click,,{"button": "submit"}
 ```
-
-#### Query by Time Range
-
-```python
-from datetime import datetime, timedelta
-
-# Get logs from the last hour
-end_time = datetime.now()
-start_time = end_time - timedelta(hours=1)
-recent_logs = logger.get_logs_between(
-    "logs_master", 
-    start_time, 
-    end_time
-)
-
-# Get logs from specific time range with filters
-errors_in_range = logger.get_logs_between(
-    "logs_master",
-    start_time,
-    end_time,
-    limit=100,
-    log_level="ERROR"
-)
-
-# Query custom table in time range
-user_actions = logger.get_logs_between(
-    "user_actions",
-    start_time,
-    end_time,
-    user_id="123"
-)
-```
-
-#### Search by Keyword
-
-```python
-# Search for logs containing a keyword in any text field
-results = logger.search_logs("errors", "database")
-
-# Search in specific fields
-results = logger.search_logs(
-    "errors", 
-    "connection", 
-    fields=["error_message"]
-)
-
-# Search with additional filters
-results = logger.search_logs(
-    "errors",
-    "timeout",
-    fields=["error_message", "error_details"],
-    severity="high",
-    limit=50
-)
-
-# Search is case-insensitive and matches partial strings
-results = logger.search_logs("user_actions", "admin")  # Matches "admin", "Admin", "administrator"
-```
-
-**Note:** All advanced search methods require `use_local_db=True` (default) at initialization.
 
 ## Use Cases
 
-### Scenario 1: Production with Loki + Local Database
+### Scenario 1: Production with Loki + Local CSV
 
 ```python
 from mogger import Mogger, LokiConfig
@@ -341,18 +400,18 @@ loki_config = LokiConfig(
     tags={"application": "web-api", "environment": "production"}
 )
 
-logger = Mogger("mogger_config.yaml", loki_config=loki_config)
+logger = Mogger("mogger.config.yaml", loki_config=loki_config)
 
-# All logs go to local DB, Loki, and terminal
+# All logs go to local CSV, Loki, and terminal
 logger.info("Request processed", category="api_requests", 
-            endpoint="/api/users", response_time=0.15)
+            endpoint="/api/users", method="GET", status_code=200, response_time_ms=0.15)
 ```
 
 ### Scenario 2: Development with Terminal Only
 
 ```python
-# No database, just terminal output
-logger = Mogger("mogger_config.yaml", use_local_db=False)
+# No CSV files, just terminal output for quick debugging
+logger = Mogger("mogger.config.yaml", log_to_csv=False)
 
 logger.info("Debug message", category="user_actions", 
             user_id="dev", action="test")
@@ -368,33 +427,106 @@ loki_config = LokiConfig(
     tags={"application": "microservice"}
 )
 
-logger = Mogger("mogger_config.yaml", loki_config=loki_config, use_local_db=False)
+logger = Mogger("mogger.config.yaml", loki_config=loki_config, log_to_csv=False)
 
 # All logs go only to Loki
 logger.info("Service started", category="system_events", 
-            event_type="startup")
+            event_type="startup", description="Service initialized")
 ```
 
 ### Scenario 4: Mixed Logging Patterns
 
 ```python
-logger = Mogger("mogger_config.yaml", loki_config=loki_config)
+logger = Mogger("mogger.config.yaml", loki_config=loki_config)
 
 # Important logs: all destinations
 logger.error("Critical failure", category="errors", 
-             error_code=500, severity="critical")
+             error_code=500, error_message="Database connection failed", severity="critical")
 
-# Debug logs: terminal only
-logger.debug("Variable value", category="debug", 
-             value=42, use_local_db=False)
+# Debug logs: terminal only (not persisted)
+logger.debug("Variable value", category="system_events", 
+             event_type="debug", description="x=42", log_to_csv=False)
 
-# Audit logs: database and Loki only (silent)
-logger.info("User action", category="audit", 
+# Audit logs: CSV and Loki only (silent)
+logger.info("User action", category="user_actions", 
             user_id="123", action="delete", log_to_shell=False)
 
-# Temporary logs: terminal only (not persisted)
-logger.info("Processing...", category="status", 
-            progress=50, use_local_db=False)
+# Context-aware logs: Loki and terminal only (context fields not in schema)
+logger.set_context(trace_id="abc-123")
+logger.info("Traced action", category="user_actions", 
+            user_id="123", action="view", log_to_csv=False)
+logger.clear_context()
+```
+
+### Scenario 5: API Request Logging
+
+```python
+import time
+
+logger = Mogger("mogger.config.yaml")
+
+# Log incoming request
+start_time = time.time()
+
+# ... process request ...
+
+# Log completed request
+elapsed_ms = (time.time() - start_time) * 1000
+logger.info(
+    "API request completed",
+    category="api_requests",
+    endpoint="/api/users/123",
+    method="GET",
+    status_code=200,
+    response_time_ms=elapsed_ms,
+    request_body=None,
+    response_body={"id": 123, "name": "John"}
+)
+```
+
+## Error Handling
+
+```python
+from mogger import Mogger, FieldValidationError
+
+logger = Mogger("mogger.config.yaml")
+
+try:
+    # Attempt to log with invalid fields
+    logger.info("Test", category="user_actions", invalid_field="value")
+except FieldValidationError as e:
+    print(f"Validation error: {e}")
+    # Handle gracefully - maybe log without the invalid field
+    logger.info("Test", category="user_actions", user_id="123", action="fallback")
+```
+
+## Thread Safety
+
+Mogger is thread-safe and can be used from multiple threads simultaneously:
+
+```python
+import threading
+from mogger import Mogger
+
+logger = Mogger("mogger.config.yaml")
+
+def worker(worker_id):
+    for i in range(100):
+        logger.info(f"Log from worker {worker_id}", 
+                    category="system_events", 
+                    event_type="worker", 
+                    description=f"Task {i}")
+
+# Create multiple threads
+threads = [threading.Thread(target=worker, args=(i,)) for i in range(5)]
+
+# Start all threads
+for t in threads:
+    t.start()
+
+# Wait for completion
+for t in threads:
+    t.join()
 ```
 
 ## Development
@@ -409,6 +541,50 @@ pytest tests/
 
 ```bash
 python -m build
+```
+
+## Migration from v0.2.x (SQLite)
+
+If you're migrating from the SQLite-based version:
+
+| v0.2.x (SQLite) | v0.3.x (CSV) |
+|-----------------|--------------|
+| `database:` in YAML | `directory:` in YAML |
+| `db_path` parameter | Removed (use `directory.path` in YAML) |
+| `use_local_db` parameter | `log_to_csv` parameter |
+| `logger.query(...)` | Removed (read CSV files directly) |
+| `logger.get_latest_logs(...)` | Removed |
+| `logger.get_oldest_logs(...)` | Removed |
+| `logger.get_logs_between(...)` | Removed |
+| `logger.search_logs(...)` | Removed |
+| `logger.close()` | Removed (not needed) |
+| Field types: `string`, `integer` | Field types: `str`, `int` |
+
+### Config Migration Example
+
+**Before (v0.2.x):**
+```yaml
+database:
+  path: "./logs.db"
+  wal_mode: true
+
+tables:
+  - name: "user_actions"
+    fields:
+      - name: "user_id"
+        type: "string"
+```
+
+**After (v0.3.x):**
+```yaml
+directory:
+  path: "./.mogger.logs"
+
+tables:
+  - name: "user_actions"
+    fields:
+      - name: "user_id"
+        type: "str"
 ```
 
 ## License
