@@ -78,7 +78,9 @@ class CSVWriter:
         if field_type == "bool":
             return "true" if value else "false"
         
-        return str(value)
+        # Replace real newlines with a literal \n so the CSV stays single-line
+        # per row, making it safe for naive parsers that split on newlines.
+        return str(value).replace("\r\n", "\\n").replace("\r", "\\n").replace("\n", "\\n")
     
     def write_log(
         self,
